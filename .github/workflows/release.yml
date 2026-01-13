@@ -24,24 +24,33 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+      - name: Get commit info
+        id: commit_info
+        run: |
+          echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
       - name: Build binaries
         run: |
           mkdir -p dist
 
+          # Build flags
+          LDFLAGS="-s -w -X main.Version=${{ steps.get_version.outputs.VERSION }} -X main.Commit=${{ steps.commit_info.outputs.COMMIT }} -X main.Date=${{ steps.commit_info.outputs.DATE }}"
+
           # macOS Intel
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/dockerview-darwin-amd64 ./cmd/dockerview
+          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/dockerview-darwin-amd64 ./cmd/dockerview
 
           # macOS Apple Silicon
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/dockerview-darwin-arm64 ./cmd/dockerview
+          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/dockerview-darwin-arm64 ./cmd/dockerview
 
           # Linux AMD64
-          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/dockerview-linux-amd64 ./cmd/dockerview
+          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/dockerview-linux-amd64 ./cmd/dockerview
 
           # Linux ARM64
-          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/dockerview-linux-arm64 ./cmd/dockerview
+          GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/dockerview-linux-arm64 ./cmd/dockerview
 
           # Windows AMD64
-          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/dockerview-windows-amd64.exe ./cmd/dockerview
+          GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/dockerview-windows-amd64.exe ./cmd/dockerview
 
           # Show files
           ls -lh dist/
