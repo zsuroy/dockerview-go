@@ -59,11 +59,9 @@ DOCKER_HOST=unix:///path/to/docker.sock ./dockerview
 ```txt
 dockerview-go/
 ├── cmd/
-│   ├── dockerview/
-│   │   ├── main.go              # Main application with bubbletea UI
-│   │   └── model.go             # Model
-│   └── debug/
-│       └── main.go              # Debug tool for testing Docker connection
+│   └── dockerview/
+│       ├── main.go              # Main application with bubbletea UI
+│       └── model.go             # Model
 ├── internal/
 │   └── docker/
 │       └── client.go            # Docker client and stats fetching
