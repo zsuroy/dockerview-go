@@ -2,8 +2,6 @@
 
 A beautiful terminal-based Docker container monitoring tool built with Go and bubbletea.
 
-![DockerView](https://via.placeholder.com/800x400/1a1a2e/00d9ff?text=DockerView+Monitor)
-
 ## Description
 
 DockerView-Go is a real-time Docker container monitoring tool featuring a modern terminal UI. It displays container statistics including ID, name, status, CPU usage, and memory usage with automatic refresh.
@@ -24,8 +22,8 @@ DockerView-Go is a real-time Docker container monitoring tool featuring a modern
 ```bash
 git clone https://github.com/zsuroy/dockerview-go.git
 cd dockerview-go
-go build -o dv ./cmd/dockerview/
-./dv
+go build -o dockerview ./cmd/dockerview/
+./dockerview
 ```
 
 ### Quick Run
@@ -37,7 +35,7 @@ go run ./cmd/dockerview/
 ## Usage
 
 ```bash
-./dv
+./dockerview
 ```
 
 ### Controls
@@ -53,16 +51,17 @@ DockerView-Go automatically detects Docker sockets:
 - Custom socket via `DOCKER_HOST` environment variable
 
 ```bash
-DOCKER_HOST=unix:///path/to/docker.sock ./dv
+DOCKER_HOST=unix:///path/to/docker.sock ./dockerview
 ```
 
 ## Project Structure
 
-```
+```txt
 dockerview-go/
 ├── cmd/
 │   ├── dockerview/
-│   │   └── main.go              # Main application with bubbletea UI
+│   │   ├── main.go              # Main application with bubbletea UI
+│   │   └── model.go             # Model
 │   └── debug/
 │       └── main.go              # Debug tool for testing Docker connection
 ├── internal/
@@ -90,7 +89,7 @@ dockerview-go/
 
 ```bash
 # Build binary
-go build -o dv ./cmd/dockerview/
+go build -o dockerview ./cmd/dockerview/
 
 # Build with version info
 go build -ldflags="-s -w" ./cmd/dockerview/
