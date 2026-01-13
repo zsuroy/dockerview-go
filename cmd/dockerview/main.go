@@ -20,7 +20,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("DockerView-Go v%s\n", Version)
+		fmt.Printf("DockerView-Go %s\n", Version)
 		fmt.Printf("Commit: %s\n", Commit)
 		fmt.Printf("Built: %s\n", Date)
 		os.Exit(0)

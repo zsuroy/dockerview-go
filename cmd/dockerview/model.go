@@ -61,7 +61,7 @@ func (m *model) View() string {
 	title := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#00D9FF")).
-		Render("DockerView Monitor v" + Version)
+		Render("DockerView Monitor " + Version)
 
 	subtitle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#666666")).
