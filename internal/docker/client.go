@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
 	"io"
 	"os"
-	"os/exec"
-	"strings"
+	"runtime"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 )
 
 type ContainerInfo struct {
@@ -21,48 +21,73 @@ type ContainerInfo struct {
 }
 
 func NewClient() (*client.Client, error) {
-	dockerHost := os.Getenv("DOCKER_HOST")
-	if dockerHost == "" {
-		if path := detectColimaSocket(); path != "" {
-			dockerHost = "unix://" + path
-			os.Setenv("DOCKER_HOST", dockerHost)
+	if dockerHost := os.Getenv("DOCKER_HOST"); dockerHost != "" {
+		if cli, err := tryConnect(dockerHost); err == nil {
+			return cli, nil
 		}
 	}
 
-	cli, err := client.NewClientWithOpts(
-		client.WithHost(dockerHost),
-		client.WithAPIVersionNegotiation(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Docker client: %w", err)
-	}
-	if _, err = cli.Ping(context.Background()); err != nil {
-		return nil, fmt.Errorf("docker daemon not accessible: %w", err)
-	}
-	return cli, nil
-}
-
-func detectColimaSocket() string {
-	home, _ := os.UserHomeDir()
-	colimaSocket := home + "/.colima/default/docker.sock"
-	if _, err := os.Stat(colimaSocket); err == nil {
-		return colimaSocket
-	}
-	if out, _ := exec.Command("docker", "context", "ls").Output(); strings.Contains(string(out), "colima") {
-		if out, _ := exec.Command("docker", "context", "inspect", "colima").Output(); len(out) > 0 {
-			var contexts []map[string]interface{}
-			json.Unmarshal(out, &contexts)
-			if len(contexts) > 0 {
-				if endpoint, ok := contexts[0]["Endpoints"].(map[string]interface{})["docker"]; ok {
-					if ep, ok := endpoint.(map[string]interface{})["Host"]; ok {
-						host := fmt.Sprintf("%v", ep)
-						return strings.TrimPrefix(host, "unix://")
-					}
-				}
+	if runtime.GOOS == "windows" {
+		hosts := []string{
+			"//./pipe/docker_engine",
+			"//./pipe/docker_engine_wsl",
+			"//./pipe/podman",
+			"//./pipe/rancher-desktop",
+		}
+		for _, host := range hosts {
+			if cli, err := tryConnect(host); err == nil {
+				return cli, nil
+			}
+		}
+	} else {
+		sockets := detectUnixSockets()
+		for _, socket := range sockets {
+			if cli, err := tryConnect("unix://" + socket); err == nil {
+				return cli, nil
 			}
 		}
 	}
-	return ""
+
+	if cli, err := client.NewClientWithOpts(
+		client.FromEnv,
+		client.WithAPIVersionNegotiation(),
+	); err == nil {
+		if _, err = cli.Ping(context.Background()); err == nil {
+			return cli, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no docker daemon found")
+}
+
+func detectUnixSockets() []string {
+	var sockets []string
+
+	sockets = append(sockets, "/var/run/docker.sock")
+
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		sockets = append(sockets, home+"/.colima/default/docker.sock")
+		sockets = append(sockets, home+"/.orbstack/run/docker.sock")
+
+		if runtime.GOOS == "darwin" {
+			sockets = append(sockets, home+"/Library/Containers/rancher-desktop/Data/docker.sock")
+			sockets = append(sockets, home+"/Library/Containers/com.redhat.podman/Data/docker.sock")
+		}
+	}
+
+	if runtime.GOOS == "linux" {
+		sockets = append(sockets, "/run/podman/podman.sock")
+		if uid := os.Getuid(); uid != 0 {
+			sockets = append(sockets, fmt.Sprintf("/run/user/%d/podman/podman.sock", uid))
+		}
+	}
+
+	if home, _ := os.UserHomeDir(); home != "" {
+		sockets = append(sockets, home+"/.minikube/apiserver.sock")
+	}
+
+	return sockets
 }
 
 func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo, error) {
@@ -157,4 +182,22 @@ func formatBytes(bytes uint64) string {
 	}
 
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func tryConnect(host string) (*client.Client, error) {
+	cli, err := client.NewClientWithOpts(
+		client.WithHost(host),
+		client.WithAPIVersionNegotiation(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = cli.Ping(context.Background())
+	if err != nil {
+		cli.Close()
+		return nil, err
+	}
+
+	return cli, nil
 }

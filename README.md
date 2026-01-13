@@ -93,33 +93,8 @@ dockerview-go/
 go build -o dv ./cmd/dockerview/
 
 # Build with version info
-go build -ldflags="-s -w" -o dv ./cmd/dockerview/
+go build -ldflags="-s -w" ./cmd/dockerview/
 ```
-
-## Screenshots
-
-```
-┌────────────────────────────────────────┐
-│  DockerView Monitor                    │
-│  Press Ctrl+C to exit                  │
-│                                        │
-│  ID         Name              Status   │ CPU     Memory
-│  ────────────────────────────────────────────────
-│  d1c80c1090bb infallible_snyder Up 2 h...  0.0%    4.8 MB
-│  abc123def456 my-postgres      Up 1 h...  2.5%    256 MB
-│  xyz789ghi012 redis-cache      Running      0.8%    45 MB
-└────────────────────────────────────────┘
-```
-
-## Debugging
-
-If you encounter issues, use the debug tool:
-
-```bash
-go run ./cmd/debug/
-```
-
-This will print Docker connection status and container list.
 
 ## License
 
