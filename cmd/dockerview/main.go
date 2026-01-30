@@ -19,6 +19,8 @@ func main() {
 	showHelp := flag.Bool("help", false, "Show help and exit")
 	flag.Parse()
 
+	SetColor()
+
 	if *showVersion {
 		fmt.Printf("DockerView-Go %s\n", Version)
 		fmt.Printf("Commit: %s\n", Commit)
@@ -89,7 +91,7 @@ func printHelp() {
 	fmt.Println("  dockerview-go -version")
 	fmt.Println()
 	fmt.Println("CONTROLS:")
-	fmt.Println("  Ctrl+C    Exit the application")
+	fmt.Println("  Ctrl+C    Exit application")
 	fmt.Println()
 	fmt.Println("DOCKER SOCKET:")
 	fmt.Println("  DockerView-Go automatically detects Docker sockets.")
