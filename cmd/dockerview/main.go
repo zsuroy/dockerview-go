@@ -15,11 +15,17 @@ import (
 )
 
 func main() {
-	showVersion := flag.Bool("version", false, "Show version and exit")
-	showHelp := flag.Bool("help", false, "Show help and exit")
+	updateTolatest := flag.Bool("update", false, "update to the latest")
+	showVersion := flag.Bool("version", false, "Show version")
+	showHelp := flag.Bool("help", false, "Show help")
 	flag.Parse()
 
 	SetColor()
+
+	if *updateTolatest {
+		doUpdate()
+		os.Exit(0)
+	}
 
 	if *showVersion {
 		fmt.Printf("DockerView-Go %s\n", Version)
@@ -76,25 +82,27 @@ func main() {
 }
 
 func printHelp() {
-	fmt.Printf("DockerView-Go v%s - A beautiful terminal-based Docker container monitoring tool\n\n", Version)
+	fmt.Printf("DockerView %s - A beautiful terminal-based Docker container monitoring tool\n\n", Version)
 	fmt.Println("USAGE:")
-	fmt.Println("  dockerview-go [OPTIONS]")
+	fmt.Println("  dockerview [OPTIONS]")
 	fmt.Println()
 	fmt.Println("OPTIONS:")
-	fmt.Println("  -version, -help")
+	fmt.Println("  -update")
+	fmt.Println("        Update to the latest")
+	fmt.Println("  -help")
 	fmt.Println("        Show this help message")
 	fmt.Println("  -version")
 	fmt.Println("        Show version information and exit")
 	fmt.Println()
 	fmt.Println("EXAMPLES:")
-	fmt.Println("  dockerview-go")
-	fmt.Println("  dockerview-go -version")
+	fmt.Println("  dockerview")
+	fmt.Println("  dockerview -version")
 	fmt.Println()
 	fmt.Println("CONTROLS:")
 	fmt.Println("  Ctrl+C    Exit application")
 	fmt.Println()
 	fmt.Println("DOCKER SOCKET:")
-	fmt.Println("  DockerView-Go automatically detects Docker sockets.")
+	fmt.Println("  DockerView automatically detects Docker sockets.")
 	fmt.Println("  You can also specify via DOCKER_HOST environment variable:")
 	fmt.Println("  DOCKER_HOST=unix:///path/to/docker.sock dockerview-go")
 	fmt.Println()
