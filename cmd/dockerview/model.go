@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"dockerview-go/internal/docker"
+	"github.com/zsuroy/dockerview-go/internal/docker"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

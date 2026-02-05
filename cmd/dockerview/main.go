@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"dockerview-go/internal/docker"
+	"github.com/zsuroy/dockerview-go/internal/docker"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -92,7 +92,7 @@ func printHelp() {
 	fmt.Println("  -help")
 	fmt.Println("        Show this help message")
 	fmt.Println("  -version")
-	fmt.Println("        Show version information and exit")
+	fmt.Println("        Show version information")
 	fmt.Println()
 	fmt.Println("EXAMPLES:")
 	fmt.Println("  dockerview")
@@ -104,7 +104,7 @@ func printHelp() {
 	fmt.Println("DOCKER SOCKET:")
 	fmt.Println("  DockerView automatically detects Docker sockets.")
 	fmt.Println("  You can also specify via DOCKER_HOST environment variable:")
-	fmt.Println("  DOCKER_HOST=unix:///path/to/docker.sock dockerview-go")
+	fmt.Println("  DOCKER_HOST=unix:///path/to/docker.sock dockerview")
 	fmt.Println()
 	fmt.Println("For more information, visit: https://github.com/zsuroy/dockerview-go")
 }

@@ -1,4 +1,4 @@
-module dockerview-go
+module github.com/zsuroy/dockerview-go
 
 go 1.21
 

@@ -22,8 +22,19 @@ DockerView-Go is a real-time Docker container monitoring tool featuring a modern
 ```bash
 git clone https://github.com/zsuroy/dockerview-go.git
 cd dockerview-go
-go build -o dockerview ./cmd/dockerview/
-./dockerview
+make build
+./build/dockerview
+```
+
+### Using Makefile
+
+```bash
+make build      # Build binary
+make install    # Install to $GOPATH/bin
+make test       # Run tests
+make fmt        # Format code
+make vet        # Run go vet
+make deps       # Download dependencies
 ```
 
 ### Quick Run
@@ -58,17 +69,29 @@ DOCKER_HOST=unix:///path/to/docker.sock ./dockerview
 
 ```txt
 dockerview-go/
-├── cmd/
-│   └── dockerview/
-│       ├── main.go              # Main application with bubbletea UI
-│       └── model.go             # Model
-├── internal/
-│   └── docker/
-│       └── client.go            # Docker client and stats fetching
-├── go.mod                       # Go module definition
-├── go.sum                       # Dependency checksums
-├── LICENSE                      # MIT License
-└── README.md                    # This file
+├── cmd/                          # Application entry points
+│   └── dockerview/               # Main CLI application
+│       ├── main.go               # Application entry point
+│       ├── model.go              # TUI model
+│       ├── update.go             # Self-update functionality
+│       ├── utils.go              # Utility functions
+│       └── version.go            # Version info
+├── internal/                     # Private application code
+│   └── docker/                   # Docker client & stats
+│       ├── client.go             # Docker client
+│       └── client_test.go        # Client tests
+├── pkg/                          # Public libraries (if any)
+├── test/                         # Integration tests & test data
+├── configs/                      # Configuration files (if any)
+├── docs/                         # Documentation (if any)
+├── .github/                      # GitHub CI/CD
+├── Makefile                      # Build commands
+├── go.mod                        # Go module definition
+├── go.sum                        # Dependency checksums
+├── LICENSE                       # MIT License
+├── README.md                     # This file
+├── CHANGELOG.md                  # Changelog
+└── CONTRIBUTING.md               # Contributing guide
 ```
 
 ## Dependencies
@@ -84,6 +107,22 @@ dockerview-go/
 - Terminal with true color support (recommended)
 
 ## Building
+
+### Using Makefile (Recommended)
+
+```bash
+make build      # Build binary to ./build/dockerview
+make install    # Install to $GOPATH/bin
+make test       # Run tests
+make fmt        # Format code
+make vet        # Run go vet
+make deps       # Download and tidy dependencies
+make release    # Build for all platforms (macOS, Linux, Windows)
+make run        # Build and run
+make clean      # Clean build directory
+```
+
+### Using go build
 
 ```bash
 # Build binary
