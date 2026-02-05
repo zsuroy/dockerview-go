@@ -8,7 +8,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
 
@@ -91,7 +91,7 @@ func detectUnixSockets() []string {
 }
 
 func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo, error) {
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	containers, err := cli.ContainerList(ctx, container.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
