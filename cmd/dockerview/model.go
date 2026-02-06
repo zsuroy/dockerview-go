@@ -73,15 +73,17 @@ func (m *model) View() string {
 		headerStyle,
 		headerStyle,
 		headerStyle,
+		headerStyle,
 	}
 
 	header := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		colStyles[0].Width(14).Render("ID"),
 		colStyles[1].Width(20).Render("Name"),
-		colStyles[2].Width(14).Render("Status"),
 		colStyles[3].Width(8).Render("CPU"),
 		colStyles[4].Width(10).Render("Memory"),
+		colStyles[5].Width(18).Render("Network"),
+		colStyles[2].Width(20).Render("Status"),
 	)
 
 	var rows []string
@@ -97,8 +99,8 @@ func (m *model) View() string {
 		}
 
 		status := c.Status
-		if len(status) > 14 {
-			status = status[:12] + ".."
+		if len(status) > 20 {
+			status = status[:18] + ".."
 		}
 
 		cpuVal, _ := strconv.ParseFloat(strings.TrimSuffix(c.CPU, "%"), 64)
@@ -120,9 +122,10 @@ func (m *model) View() string {
 			lipgloss.Top,
 			lipgloss.NewStyle().Foreground(lipgloss.Color("#00D9FF")).Width(14).Render(id),
 			lipgloss.NewStyle().Width(20).Render(name),
-			lipgloss.NewStyle().Foreground(statusColor).Width(14).Render(status),
 			lipgloss.NewStyle().Foreground(cpuColor).Width(8).Render(c.CPU),
 			lipgloss.NewStyle().Foreground(lipgloss.Color("#00D9FF")).Width(10).Render(c.Memory),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Width(16).Render(c.Network),
+			lipgloss.NewStyle().Foreground(statusColor).Width(20).Render(status),
 		)
 		rows = append(rows, row)
 	}
@@ -139,7 +142,7 @@ func (m *model) View() string {
 		title,
 		subtitle,
 		header,
-		strings.Repeat("─", 64),
+		strings.Repeat("─", 94),
 		strings.Join(rows, "\n"),
 	)
 
