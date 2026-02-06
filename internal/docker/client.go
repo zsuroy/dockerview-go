@@ -13,11 +13,12 @@ import (
 )
 
 type ContainerInfo struct {
-	ID     string
-	Name   string
-	Status string
-	CPU    string
-	Memory string
+	ID      string
+	Name    string
+	Status  string
+	CPU     string
+	Memory  string
+	Network string
 }
 
 func NewClient() (*client.Client, error) {
@@ -98,13 +99,13 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 
 	var result []ContainerInfo
 	for _, c := range containers {
-		stats, err := cli.ContainerStatsOneShot(ctx, c.ID)
+		statsData, err := cli.ContainerStatsOneShot(ctx, c.ID)
 		if err != nil {
 			continue
 		}
 
-		cpuPercent, memoryUsage, err := parseStats(stats.Body)
-		stats.Body.Close()
+		cpuPercent, memoryUsage, networks, err := parseStats(statsData.Body)
+		statsData.Body.Close()
 		if err != nil {
 			continue
 		}
@@ -120,10 +121,27 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 			Status: status,
 			CPU:    fmt.Sprintf("%.1f%%", cpuPercent),
 			Memory: memoryUsage,
+			Network: func() string {
+				var totalRx, totalTx uint64
+				for _, net := range networks {
+					totalRx += net.RxBytes
+					totalTx += net.TxBytes
+				}
+				return fmt.Sprintf("↓%s ↑%s",
+					formatBytes(totalRx),
+					formatBytes(totalTx))
+			}(),
 		})
 	}
 
 	return result, nil
+}
+
+type NetworkStats struct {
+	RxBytes   uint64 `json:"rx_bytes"`
+	RxPackets uint64 `json:"rx_packets"`
+	TxBytes   uint64 `json:"tx_bytes"`
+	TxPackets uint64 `json:"tx_packets"`
 }
 
 type statsJSON struct {
@@ -144,12 +162,14 @@ type statsJSON struct {
 		Usage uint64 `json:"usage"`
 		Limit uint64 `json:"limit"`
 	} `json:"memory_stats"`
+	Networks map[string]NetworkStats `json:"networks"`
 }
 
-func parseStats(body io.Reader) (float64, string, error) {
+func parseStats(body io.Reader) (float64, string, map[string]NetworkStats, error) {
 	var stats statsJSON
+
 	if err := json.NewDecoder(body).Decode(&stats); err != nil {
-		return 0, "", err
+		return 0, "", nil, err
 	}
 
 	var cpuPercent float64
@@ -166,7 +186,7 @@ func parseStats(body io.Reader) (float64, string, error) {
 	usage := stats.MemoryStats.Usage
 	memoryUsage = formatBytes(usage)
 
-	return cpuPercent, memoryUsage, nil
+	return cpuPercent, memoryUsage, stats.Networks, nil
 }
 
 func formatBytes(bytes uint64) string {
