@@ -18,6 +18,7 @@ type ContainerInfo struct {
 	Status  string
 	CPU     string
 	Memory  string
+	Blkio   string
 	Network string
 }
 
@@ -104,7 +105,7 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 			continue
 		}
 
-		cpuPercent, memoryUsage, networks, err := parseStats(statsData.Body)
+		cpuPercent, memoryUsage, blkio, networks, err := parseStats(statsData.Body)
 		statsData.Body.Close()
 		if err != nil {
 			continue
@@ -121,6 +122,9 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 			Status: status,
 			CPU:    fmt.Sprintf("%.1f%%", cpuPercent),
 			Memory: memoryUsage,
+			Blkio: func() string {
+				return fmt.Sprintf("%s / %s", formatBytes(blkio[0].Value), formatBytes(blkio[1].Value))
+			}(),
 			Network: func() string {
 				var totalRx, totalTx uint64
 				for _, net := range networks {
@@ -137,6 +141,12 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 	return result, nil
 }
 
+type BlkioEntry struct {
+	Major int    `json:"major"`
+	Minor int    `json:"minor"`
+	Op    string `json:"op"`
+	Value uint64 `json:"value"`
+}
 type NetworkStats struct {
 	RxBytes   uint64 `json:"rx_bytes"`
 	RxPackets uint64 `json:"rx_packets"`
@@ -162,14 +172,17 @@ type statsJSON struct {
 		Usage uint64 `json:"usage"`
 		Limit uint64 `json:"limit"`
 	} `json:"memory_stats"`
+	BlockIOStats struct {
+		IOServiceBytesRecursive []BlkioEntry `json:"io_service_bytes_recursive"`
+	} `json:"blkio_stats"`
 	Networks map[string]NetworkStats `json:"networks"`
 }
 
-func parseStats(body io.Reader) (float64, string, map[string]NetworkStats, error) {
+func parseStats(body io.Reader) (float64, string, []BlkioEntry, map[string]NetworkStats, error) {
 	var stats statsJSON
 
 	if err := json.NewDecoder(body).Decode(&stats); err != nil {
-		return 0, "", nil, err
+		return 0, "", nil, nil, err
 	}
 
 	var cpuPercent float64
@@ -186,7 +199,7 @@ func parseStats(body io.Reader) (float64, string, map[string]NetworkStats, error
 	usage := stats.MemoryStats.Usage
 	memoryUsage = formatBytes(usage)
 
-	return cpuPercent, memoryUsage, stats.Networks, nil
+	return cpuPercent, memoryUsage, stats.BlockIOStats.IOServiceBytesRecursive, stats.Networks, nil
 }
 
 func formatBytes(bytes uint64) string {
