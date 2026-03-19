@@ -117,13 +117,19 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 		}
 
 		result = append(result, ContainerInfo{
-			ID:     c.ID[:12],
-			Name:   c.Names[0][1:],
+			ID:     truncateID(c.ID, 12),
+			Name:   extractContainerName(c.Names),
 			Status: status,
 			CPU:    fmt.Sprintf("%.1f%%", cpuPercent),
 			Memory: memoryUsage,
 			Blkio: func() string {
-				return fmt.Sprintf("%s / %s", formatBytes(blkio[0].Value), formatBytes(blkio[1].Value))
+				blkioStr := "N/A"
+				if len(blkio) >= 2 {
+					blkioStr = fmt.Sprintf("%s / %s", formatBytes(blkio[0].Value), formatBytes(blkio[1].Value))
+				} else if len(blkio) == 1 {
+					blkioStr = fmt.Sprintf("%s / 0 B", formatBytes(blkio[0].Value))
+				}
+				return blkioStr
 			}(),
 			Network: func() string {
 				var totalRx, totalTx uint64
@@ -233,4 +239,22 @@ func tryConnect(host string) (*client.Client, error) {
 	}
 
 	return cli, nil
+}
+
+func extractContainerName(names []string) string {
+	if len(names) == 0 || len(names[0]) == 0 {
+		return ""
+	}
+	name := names[0]
+	if name[0] == '/' {
+		return name[1:]
+	}
+	return name
+}
+
+func truncateID(id string, length int) string {
+	if len(id) >= length {
+		return id[:length]
+	}
+	return id
 }
