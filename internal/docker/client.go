@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,23 @@ func deduplicatePorts(ports []PortMapping) []PortMapping {
 		}
 	}
 	return result
+}
+
+// sortPorts returns ports in a stable display order.
+func sortPorts(ports []PortMapping) []PortMapping {
+	sort.SliceStable(ports, func(i, j int) bool {
+		if ports[i].PrivatePort != ports[j].PrivatePort {
+			return ports[i].PrivatePort < ports[j].PrivatePort
+		}
+		if ports[i].PublicPort != ports[j].PublicPort {
+			return ports[i].PublicPort < ports[j].PublicPort
+		}
+		if ports[i].Type != ports[j].Type {
+			return ports[i].Type < ports[j].Type
+		}
+		return ports[i].IP < ports[j].IP
+	})
+	return ports
 }
 
 type ContainerInfo struct {
@@ -271,7 +289,7 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 			Network:      networkStr,
 			HealthScore:  healthResult.Score,
 			HealthStatus: healthResult.Status,
-			Ports:        deduplicatePorts(ports),
+			Ports:        sortPorts(deduplicatePorts(ports)),
 		})
 	}
 
@@ -373,7 +391,7 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 			Network:      "N/A",
 			HealthScore:  healthResult.Score,
 			HealthStatus: healthResult.Status,
-			Ports:        ports,
+			Ports:        sortPorts(deduplicatePorts(ports)),
 		})
 	}
 

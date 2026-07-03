@@ -2,8 +2,30 @@ package docker
 
 import (
 	"context"
+	"reflect"
 	"testing"
 )
+
+func TestSortPorts(t *testing.T) {
+	ports := []PortMapping{
+		{IP: "127.0.0.1", PrivatePort: 443, PublicPort: 8443, Type: "tcp"},
+		{PrivatePort: 80, PublicPort: 8080, Type: "tcp"},
+		{PrivatePort: 443, PublicPort: 8443, Type: "udp"},
+		{PrivatePort: 80, Type: "tcp"},
+		{IP: "0.0.0.0", PrivatePort: 443, PublicPort: 8443, Type: "tcp"},
+	}
+	want := []PortMapping{
+		{PrivatePort: 80, Type: "tcp"},
+		{PrivatePort: 80, PublicPort: 8080, Type: "tcp"},
+		{IP: "0.0.0.0", PrivatePort: 443, PublicPort: 8443, Type: "tcp"},
+		{IP: "127.0.0.1", PrivatePort: 443, PublicPort: 8443, Type: "tcp"},
+		{PrivatePort: 443, PublicPort: 8443, Type: "udp"},
+	}
+
+	if got := sortPorts(ports); !reflect.DeepEqual(got, want) {
+		t.Fatalf("sortPorts() = %#v, want %#v", got, want)
+	}
+}
 
 func TestContainerOpUnknownOp(t *testing.T) {
 	err := ContainerOp(context.Background(), nil, "abc123", "unknown")
