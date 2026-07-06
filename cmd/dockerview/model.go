@@ -224,14 +224,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, nil
 				}
-				switch msg.Type {
-				case tea.KeyBackspace:
+				switch {
+				case isBackspaceKey(msg):
 					if len(m.execInput) > 0 {
 						m.execInput = m.execInput[:len(m.execInput)-1]
 					}
-				case tea.KeySpace:
+				case msg.Type == tea.KeySpace:
 					m.execInput += " "
-				case tea.KeyRunes:
+				case msg.Type == tea.KeyRunes:
 					m.execInput += string(msg.Runes)
 				default:
 					switch msg.String() {

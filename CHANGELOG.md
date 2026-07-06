@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **TUI Container Command Execution (Exec)**: Added inline command execution to the terminal UI. Select a running container, press `e` in the action panel to enter exec mode, type a shell command, and view stdout/stderr output with exit code. Supports retry on error, running-state validation, and matches the web dashboard exec behavior via `sh -c`.
 
+### Fixed
+
+- **TUI Exec Backspace on SSH Terminals**: Fixed backspace not working in TUI exec input when using Windows SSH clients such as MobaXterm. Now recognizes both DEL (`\x7f`) and BS/Ctrl+H (`\x08`) key codes, plus Delete key variants.
+
 ## [0.1.17] - 2026-07-03
 
 ### Fixed
