@@ -174,6 +174,7 @@ func printHelp() {
 	fmt.Println("  x         Stop container")
 	fmt.Println("  r         Restart container")
 	fmt.Println("  l         View logs")
+	fmt.Println("  e         Execute command")
 	fmt.Println("  q/Esc     Back / Exit")
 	fmt.Println("  Ctrl+C    Exit application")
 	fmt.Println()

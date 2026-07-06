@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.19] - 2026-07-06
+
+### Fixed
+
+- **Memory Usage Percent Display**: Expose `MemoryPercent` and `MemoryLimit` from Docker stats API and use them in the web dashboard RAM bars and sparklines instead of assuming a fixed 1 GB container limit.
+- **SSE Stream Resilience**: Web dashboard EventSource now reconnects automatically with exponential backoff after server restarts or transient network errors.
+
+### Added
+
+- **Exec Safety Limits**: Container exec commands now default to a 30-second timeout and cap stdout/stderr output at 256 KB per stream, with truncation notices in the response.
+- **TUI Help Text**: `-help` output now documents the `e` exec keybinding.
+
 ## [0.1.18] - 2026-07-06
 
 ### Added

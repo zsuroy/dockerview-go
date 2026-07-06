@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ArrowDownUp, HardDrive, Play, Square, RefreshCw, Terminal, HeartPulse, Command } from 'lucide-react';
 import type { Container } from '../types';
-import { parseSize } from '../utils';
+import { getMemoryPercent } from '../utils';
 import { Sparkline, HighlightedText } from './Sparkline';
 import { useTranslation } from '../i18n';
 
@@ -71,8 +71,7 @@ export function ContainerCard({ container, history, onOp, onLogs, onExec, search
 
   // Clean values
   const cpuPercent = parseFloat(container.cpu) || 0;
-  // Estimate RAM percent load assuming 1GB base
-  const ramPercent = Math.min((parseSize(container.memory) / (1024 * 1024 * 1024)) * 100, 100) || 0;
+  const ramPercent = getMemoryPercent(container.memory, container.memorypercent);
 
   // Choose fill color based on usage percent
   const getBarColorClass = (val: number, isRam = false) => {

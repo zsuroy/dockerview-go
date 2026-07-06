@@ -12,6 +12,8 @@ export interface Container {
   status: string;
   cpu: string;
   memory: string;
+  memorypercent?: number;
+  memorylimit?: string;
   blkio: string;
   network: string;
   healthscore?: number;

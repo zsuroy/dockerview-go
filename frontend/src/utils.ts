@@ -23,6 +23,14 @@ export const formatBytes = (b: number): string => {
   return `${val.toFixed(1)} ${u[i]}`;
 };
 
+// Memory usage percent from backend stats, with fallback for older servers.
+export const getMemoryPercent = (memory: string, memoryPercent?: number): number => {
+  if (memoryPercent !== undefined && !isNaN(memoryPercent)) {
+    return Math.min(Math.max(memoryPercent, 0), 100);
+  }
+  return Math.min((parseSize(memory) / (1024 * 1024 * 1024)) * 100, 100) || 0;
+};
+
 // Base path helper for subpath reverse proxies
 const currentPath = window.location.pathname;
 export const basePath = currentPath.endsWith('/') 

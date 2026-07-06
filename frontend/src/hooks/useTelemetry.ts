@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Container } from '../types';
-import { parseSize, basePath } from '../utils';
+import { parseSize, basePath, getMemoryPercent } from '../utils';
 
 export function useTelemetry(serverToken: string) {
   const [containers, setContainers] = useState<Container[]>([]);
@@ -12,12 +12,16 @@ export function useTelemetry(serverToken: string) {
   // Telemetry metric history for sparklines
   const [historyData, setHistoryData] = useState<Record<string, { cpu: number[]; ram: number[] }>>({});
 
-  // EventSource Stream connection
+  // EventSource stream with exponential-backoff reconnect
   useEffect(() => {
-    const urlSuffix = serverToken ? `?token=${serverToken}` : '';
-    const es = new EventSource(`${basePath}stream${urlSuffix}`);
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryDelay = 1000;
+    const maxRetryDelay = 30000;
+    let disposed = false;
 
-    es.onmessage = (e) => {
+    const handleMessage = (e: MessageEvent) => {
+      retryDelay = 1000;
       try {
         const raw: any[] = JSON.parse(e.data);
         const normalized: Container[] = raw.map(c => {
@@ -32,7 +36,6 @@ export function useTelemetry(serverToken: string) {
         const now = new Date();
         setLastUpdate(now.toTimeString().split(' ')[0]);
 
-        // Update metric history
         setHistoryData(prev => {
           const updated = { ...prev };
           normalized.forEach(c => {
@@ -42,9 +45,7 @@ export function useTelemetry(serverToken: string) {
             }
             let cpuVal = parseFloat(c.cpu);
             if (isNaN(cpuVal)) cpuVal = 0;
-            // memory load percent estimation
-            let ramPercent = Math.min((parseSize(c.memory) / (1024 * 1024 * 1024)) * 100, 100);
-            if (isNaN(ramPercent)) ramPercent = 0;
+            const ramPercent = getMemoryPercent(c.memory, c.memorypercent);
 
             updated[c.id].cpu = [...updated[c.id].cpu, cpuVal].slice(-20);
             updated[c.id].ram = [...updated[c.id].ram, ramPercent].slice(-20);
@@ -56,12 +57,28 @@ export function useTelemetry(serverToken: string) {
       }
     };
 
-    es.onerror = () => {
-      es.close();
+    const connect = () => {
+      if (disposed) return;
+      const urlSuffix = serverToken ? `?token=${serverToken}` : '';
+      es = new EventSource(`${basePath}stream${urlSuffix}`);
+      es.onmessage = handleMessage;
+      es.onerror = () => {
+        es?.close();
+        es = null;
+        if (disposed) return;
+        reconnectTimer = setTimeout(() => {
+          retryDelay = Math.min(retryDelay * 2, maxRetryDelay);
+          connect();
+        }, retryDelay);
+      };
     };
 
+    connect();
+
     return () => {
-      es.close();
+      disposed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      es?.close();
     };
   }, [serverToken]);
 
@@ -85,7 +102,9 @@ export function useTelemetry(serverToken: string) {
         return cpuB - cpuA;
       }
       if (sortKey === 'ram') {
-        return parseSize(b.memory) - parseSize(a.memory);
+        const ramA = getMemoryPercent(a.memory, a.memorypercent);
+        const ramB = getMemoryPercent(b.memory, b.memorypercent);
+        return ramB - ramA;
       }
       return (a.name || '').localeCompare(b.name || '');
     });

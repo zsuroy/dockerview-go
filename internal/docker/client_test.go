@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -107,5 +108,52 @@ func TestTruncateID(t *testing.T) {
 				t.Errorf("truncateID(%q, %d) = %q, want %q", tt.id, tt.length, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestCappedBuffer(t *testing.T) {
+	buf := newCappedBuffer(5)
+	if _, err := buf.Write([]byte("hello!")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if buf.String() != "hello" {
+		t.Fatalf("String() = %q, want %q", buf.String(), "hello")
+	}
+	if !buf.truncated {
+		t.Fatal("expected truncated flag after exceeding limit")
+	}
+}
+
+func TestParseStatsMemoryPercent(t *testing.T) {
+	body := strings.NewReader(`{
+		"cpu_stats": {
+			"cpu_usage": { "total_usage": 200000000 },
+			"system_cpu_usage": 1000000000,
+			"online_cpus": 4
+		},
+		"precpu_stats": {
+			"cpu_usage": { "total_usage": 100000000 },
+			"system_cpu_usage": 900000000
+		},
+		"memory_stats": { "usage": 536870912, "limit": 1073741824 },
+		"blkio_stats": { "io_service_bytes_recursive": [] },
+		"networks": {}
+	}`)
+
+	cpu, memPct, memUsage, memLimit, _, _, err := parseStats(body)
+	if err != nil {
+		t.Fatalf("parseStats() error = %v", err)
+	}
+	if cpu <= 0 {
+		t.Fatalf("cpu = %v, want > 0", cpu)
+	}
+	if memPct != 50 {
+		t.Fatalf("memory percent = %v, want 50", memPct)
+	}
+	if memUsage != "512.0 MB" {
+		t.Fatalf("memory usage = %q, want %q", memUsage, "512.0 MB")
+	}
+	if memLimit != 1073741824 {
+		t.Fatalf("memory limit = %d, want %d", memLimit, 1073741824)
 	}
 }

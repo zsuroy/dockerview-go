@@ -58,17 +58,19 @@ func sortPorts(ports []PortMapping) []PortMapping {
 }
 
 type ContainerInfo struct {
-	FullID       string
-	ID           string
-	Name         string
-	Status       string
-	CPU          string
-	Memory       string
-	Blkio        string
-	Network      string
-	HealthScore  int           `json:",omitempty"`
-	HealthStatus HealthStatus  `json:",omitempty"`
-	Ports        []PortMapping `json:"ports"`
+	FullID        string
+	ID            string
+	Name          string
+	Status        string
+	CPU           string
+	Memory        string
+	MemoryPercent float64 `json:",omitempty"`
+	MemoryLimit   string  `json:",omitempty"`
+	Blkio         string
+	Network       string
+	HealthScore   int           `json:",omitempty"`
+	HealthStatus  HealthStatus  `json:",omitempty"`
+	Ports         []PortMapping `json:"ports"`
 }
 
 func NewClient() (*client.Client, error) {
@@ -189,6 +191,7 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 		cpuPercent := 0.0
 		memoryPercent := 0.0
 		memoryUsage := "0 B"
+		var memoryLimit uint64
 		blkioStr := "N/A"
 		networkStr := "N/A"
 		var blkio []BlkioEntry
@@ -197,7 +200,7 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 		statsData, err := cli.ContainerStatsOneShot(ctx, c.ID)
 		if err == nil {
 			var parseErr error
-			cpuPercent, memoryPercent, memoryUsage, blkio, networks, parseErr = parseStats(statsData.Body)
+			cpuPercent, memoryPercent, memoryUsage, memoryLimit, blkio, networks, parseErr = parseStats(statsData.Body)
 			statsData.Body.Close()
 			if parseErr == nil {
 				if len(blkio) >= 2 {
@@ -279,17 +282,19 @@ func GetContainerStats(ctx context.Context, cli *client.Client) ([]ContainerInfo
 		}
 
 		result = append(result, ContainerInfo{
-			FullID:       c.ID,
-			ID:           truncateID(c.ID, 12),
-			Name:         extractContainerName(c.Names),
-			Status:       status,
-			CPU:          fmt.Sprintf("%.1f%%", cpuPercent),
-			Memory:       memoryUsage,
-			Blkio:        blkioStr,
-			Network:      networkStr,
-			HealthScore:  healthResult.Score,
-			HealthStatus: healthResult.Status,
-			Ports:        sortPorts(deduplicatePorts(ports)),
+			FullID:        c.ID,
+			ID:            truncateID(c.ID, 12),
+			Name:          extractContainerName(c.Names),
+			Status:        status,
+			CPU:           fmt.Sprintf("%.1f%%", cpuPercent),
+			Memory:        memoryUsage,
+			MemoryPercent: memoryPercent,
+			MemoryLimit:   formatBytes(memoryLimit),
+			Blkio:         blkioStr,
+			Network:       networkStr,
+			HealthScore:   healthResult.Score,
+			HealthStatus:  healthResult.Status,
+			Ports:         sortPorts(deduplicatePorts(ports)),
 		})
 	}
 
@@ -435,11 +440,11 @@ type statsJSON struct {
 	Networks map[string]NetworkStats `json:"networks"`
 }
 
-func parseStats(body io.Reader) (float64, float64, string, []BlkioEntry, map[string]NetworkStats, error) {
+func parseStats(body io.Reader) (float64, float64, string, uint64, []BlkioEntry, map[string]NetworkStats, error) {
 	var stats statsJSON
 
 	if err := json.NewDecoder(body).Decode(&stats); err != nil {
-		return 0, 0, "", nil, nil, err
+		return 0, 0, "", 0, nil, nil, err
 	}
 
 	var cpuPercent float64
@@ -461,7 +466,7 @@ func parseStats(body io.Reader) (float64, float64, string, []BlkioEntry, map[str
 	}
 	memoryUsage = formatBytes(usage)
 
-	return cpuPercent, memoryPercent, memoryUsage, stats.BlockIOStats.IOServiceBytesRecursive, stats.Networks, nil
+	return cpuPercent, memoryPercent, memoryUsage, limit, stats.BlockIOStats.IOServiceBytesRecursive, stats.Networks, nil
 }
 
 func formatBytes(bytes uint64) string {
@@ -577,9 +582,50 @@ type ExecResult struct {
 	Stderr   string `json:"stderr"`
 }
 
+const (
+	DefaultExecTimeout   = 30 * time.Second
+	MaxExecOutputBytes   = 256 * 1024
+	execTruncatedMessage = "\n[output truncated: exceeded 256KB limit]"
+	execTimeoutMessage   = "\n[command timed out after 30s]"
+)
+
+type cappedBuffer struct {
+	buf       bytes.Buffer
+	remaining int64
+	truncated bool
+}
+
+func newCappedBuffer(limit int64) *cappedBuffer {
+	return &cappedBuffer{remaining: limit}
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	if b.remaining <= 0 {
+		b.truncated = true
+		return len(p), nil
+	}
+	if int64(len(p)) > b.remaining {
+		p = p[:b.remaining]
+		b.truncated = true
+	}
+	n, err := b.buf.Write(p)
+	b.remaining -= int64(n)
+	return n, err
+}
+
+func (b *cappedBuffer) String() string {
+	return b.buf.String()
+}
+
 // ContainerExec executes a command inside a running container and returns stdout/stderr.
 func ContainerExec(ctx context.Context, cli *client.Client, containerID string, cmd []string) (ExecResult, error) {
 	var result ExecResult
+
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, DefaultExecTimeout)
+		defer cancel()
+	}
 
 	options := container.ExecOptions{
 		AttachStdout: true,
@@ -598,10 +644,25 @@ func ContainerExec(ctx context.Context, cli *client.Client, containerID string, 
 	}
 	defer attachResp.Close()
 
-	var stdout, stderr bytes.Buffer
-	_, err = stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader)
-	if err != nil {
-		return result, err
+	stdout := newCappedBuffer(MaxExecOutputBytes)
+	stderr := newCappedBuffer(MaxExecOutputBytes)
+
+	copyDone := make(chan error, 1)
+	go func() {
+		_, err := stdcopy.StdCopy(stdout, stderr, attachResp.Reader)
+		copyDone <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		attachResp.Close()
+		result.Stderr = stderr.String() + execTimeoutMessage
+		result.Stdout = stdout.String()
+		return result, ctx.Err()
+	case err := <-copyDone:
+		if err != nil {
+			return result, err
+		}
 	}
 
 	inspectResp, err := cli.ContainerExecInspect(ctx, resp.ID)
@@ -612,6 +673,13 @@ func ContainerExec(ctx context.Context, cli *client.Client, containerID string, 
 	result.ExitCode = inspectResp.ExitCode
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
+	if stdout.truncated || stderr.truncated {
+		if result.Stderr == "" {
+			result.Stderr = execTruncatedMessage
+		} else {
+			result.Stderr += execTruncatedMessage
+		}
+	}
 
 	return result, nil
 }
