@@ -24,6 +24,11 @@ type model struct {
 	actionMode   bool
 	logsMode     bool
 	logs         []string
+	execMode     bool
+	execInput    string
+	execResult   *docker.ExecResult
+	execErr      error
+	execRunning  bool
 	statusMsg    string
 	statusTimer  *time.Timer
 	dockerClient *dockerclient.Client
@@ -41,6 +46,11 @@ type opResultMsg struct {
 type logsMsg struct {
 	lines []string
 	err   error
+}
+
+type execMsg struct {
+	result docker.ExecResult
+	err    error
 }
 
 var (
@@ -90,6 +100,9 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#333333")).
 			Padding(1)
+
+	styleExecStderr = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444"))
+	styleExecMeta   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500")).Bold(true)
 )
 
 func (m *model) Init() tea.Cmd {
@@ -133,18 +146,29 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case execMsg:
+		m.execRunning = false
+		if msg.err != nil {
+			m.execErr = msg.err
+			m.execResult = nil
+		} else {
+			m.execErr = nil
+			m.execResult = &msg.result
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyUp:
-			if !m.logsMode && !m.actionMode {
+			if !m.logsMode && !m.actionMode && !m.execMode {
 				if m.cursor > 0 {
 					m.cursor--
 				}
 			}
 		case tea.KeyDown:
-			if !m.logsMode && !m.actionMode {
+			if !m.logsMode && !m.actionMode && !m.execMode {
 				m.mu.RLock()
 				max := len(m.containers)
 				m.mu.RUnlock()
@@ -153,17 +177,73 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case tea.KeyEnter:
+			if m.execMode {
+				if m.execRunning {
+					return m, nil
+				}
+				if m.execResult != nil || m.execErr != nil {
+					m.execResult = nil
+					m.execErr = nil
+					return m, nil
+				}
+				cmd := strings.TrimSpace(m.execInput)
+				if cmd == "" {
+					return m, nil
+				}
+				m.execRunning = true
+				return m, m.runExec(cmd)
+			}
 			if !m.logsMode {
 				m.actionMode = !m.actionMode
 			}
 		case tea.KeyEsc:
-			if m.logsMode {
+			if m.execMode {
+				m.execMode = false
+				m.execInput = ""
+				m.execResult = nil
+				m.execErr = nil
+				m.execRunning = false
+			} else if m.logsMode {
 				m.logsMode = false
 				m.logs = nil
 			} else if m.actionMode {
 				m.actionMode = false
 			}
 		default:
+			if m.execMode {
+				if m.execRunning {
+					return m, nil
+				}
+				if m.execResult != nil || m.execErr != nil {
+					switch msg.String() {
+					case "q":
+						m.execMode = false
+						m.execInput = ""
+						m.execResult = nil
+						m.execErr = nil
+					}
+					return m, nil
+				}
+				switch msg.Type {
+				case tea.KeyBackspace:
+					if len(m.execInput) > 0 {
+						m.execInput = m.execInput[:len(m.execInput)-1]
+					}
+				case tea.KeySpace:
+					m.execInput += " "
+				case tea.KeyRunes:
+					m.execInput += string(msg.Runes)
+				default:
+					switch msg.String() {
+					case "q":
+						m.execMode = false
+						m.execInput = ""
+						m.execResult = nil
+						m.execErr = nil
+					}
+				}
+				return m, nil
+			}
 			if m.logsMode {
 				switch msg.String() {
 				case "q":
@@ -184,6 +264,26 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.doContainerOp("restart")
 				case "l":
 					return m, m.fetchLogs()
+				case "e":
+					m.mu.RLock()
+					canExec := m.cursor < len(m.containers) &&
+						!strings.Contains(strings.ToLower(m.containers[m.cursor].Status), "exit")
+					m.mu.RUnlock()
+					if !canExec {
+						m.statusMsg = "Error: container is not running"
+						m.statusTimer = time.AfterFunc(3*time.Second, func() {
+							m.mu.Lock()
+							m.statusMsg = ""
+							m.mu.Unlock()
+						})
+						return m, nil
+					}
+					m.actionMode = false
+					m.execMode = true
+					m.execInput = ""
+					m.execResult = nil
+					m.execErr = nil
+					m.execRunning = false
 				}
 			}
 		}
@@ -249,7 +349,30 @@ func (m *model) fetchLogs() tea.Cmd {
 	}
 }
 
+func (m *model) runExec(cmd string) tea.Cmd {
+	return func() tea.Msg {
+		m.mu.RLock()
+		if m.cursor >= len(m.containers) {
+			m.mu.RUnlock()
+			return execMsg{err: fmt.Errorf("no container selected")}
+		}
+		id := m.containers[m.cursor].FullID
+		cli := m.dockerClient
+		m.mu.RUnlock()
+
+		if cli == nil {
+			return execMsg{err: fmt.Errorf("docker client not available")}
+		}
+
+		result, err := docker.ContainerExec(context.Background(), cli, id, []string{"sh", "-c", cmd})
+		return execMsg{result: result, err: err}
+	}
+}
+
 func (m *model) View() string {
+	if m.execMode {
+		return m.viewExec()
+	}
 	if m.logsMode {
 		return m.viewLogs()
 	}
@@ -340,7 +463,7 @@ func (m *model) View() string {
 		m.mu.RUnlock()
 
 		actionBar := styleActionBar.Render(
-			fmt.Sprintf(" %s | [S]tart  [X]Stop  [R]estart  [L]ogs  [Q]uit ",
+			fmt.Sprintf(" %s | [S]tart  [X]Stop  [R]estart  [L]ogs  [E]xec  [Q]uit ",
 				lipgloss.NewStyle().Bold(true).Render(selectedName)),
 		)
 		content += "\n\n" + actionBar
@@ -379,4 +502,47 @@ func (m *model) viewLogs() string {
 	return styleLogs.Render(
 		fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, logContent),
 	)
+}
+
+func (m *model) viewExec() string {
+	m.mu.RLock()
+	var name string
+	if m.cursor < len(m.containers) {
+		name = m.containers[m.cursor].Name
+	}
+	m.mu.RUnlock()
+
+	title := styleTitle.Render("Exec: " + name)
+
+	var body string
+	switch {
+	case m.execRunning:
+		subtitle := styleSubtitle.Render("Executing command...")
+		body = styleEmpty.Render("Please wait")
+		return styleLogs.Render(fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, body))
+	case m.execErr != nil:
+		subtitle := styleSubtitle.Render("Press Enter to retry | q or Esc to return")
+		body = styleError.Render(fmt.Sprintf("Error: %v", m.execErr))
+		return styleLogs.Render(fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, body))
+	case m.execResult != nil:
+		subtitle := styleSubtitle.Render(fmt.Sprintf("Exit code: %d | Enter new command | q or Esc to return", m.execResult.ExitCode))
+		var parts []string
+		parts = append(parts, styleExecMeta.Render(fmt.Sprintf("$ %s", m.execInput)))
+		if m.execResult.Stdout != "" {
+			parts = append(parts, m.execResult.Stdout)
+		}
+		if m.execResult.Stderr != "" {
+			parts = append(parts, styleExecStderr.Render(m.execResult.Stderr))
+		}
+		if m.execResult.Stdout == "" && m.execResult.Stderr == "" {
+			parts = append(parts, styleEmpty.Render("(no output)"))
+		}
+		body = strings.Join(parts, "\n\n")
+		return styleLogs.Render(fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, body))
+	default:
+		subtitle := styleSubtitle.Render("Type command and press Enter | q or Esc to cancel")
+		prompt := fmt.Sprintf("$ %s_", m.execInput)
+		body = prompt
+		return styleLogs.Render(fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, body))
+	}
 }

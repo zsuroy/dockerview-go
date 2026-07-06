@@ -26,12 +26,12 @@ English | [中文](README_zh.md)
 ## Features
 
 - **Real-time Monitoring**: Updates every second.
-- **Beautiful TUI**: Built with [bubbletea](https://github.com/charmbracelet/bubbletea) and [lipgloss](https://github.com/charmbracelet/lipgloss) with keybindings for start, stop, restart, and inline logs viewing.
+- **Beautiful TUI**: Built with [bubbletea](https://github.com/charmbracelet/bubbletea) and [lipgloss](https://github.com/charmbracelet/lipgloss) with keybindings for start, stop, restart, inline logs viewing, and command execution.
 - **Real-Time Web Dashboard**: Enable the HTTP server (`-server`) to broadcast real-time container telemetry using Server-Sent Events (SSE) `/stream` and host a gorgeous glassmorphism web console with live SVG sparkline history, status filters, search highlighting, and 3D hover effects.
 - **Web Container Controls**: Start, stop, and restart containers directly from the Web Dashboard (only showing containers stopped via dockerview during current session to keep the list clean).
 - **Container Health Scoring**: Dynamically calculates a 0-100 health score for each container based on CPU load, memory usage, disk I/O, network rate, restarts, and uptime. Features a grouped top panel showing healthy, warning, and dangerous counts with neon pulsing indicators.
 - **Inline Logs Modal**: Read container logs from TUI or in an advanced web modal featuring case-insensitive keyword searching, log level filters (ALL, DEBUG, INFO, WARN, ERROR), customizable tail line counts, match highlighting, auto-scroll, and instant log file downloads.
-- **Command Execution Modal**: Execute shell commands inside any running container directly from the web dashboard. Features quick template shortcuts (directory list, environment variables, disk usage, etc.), stdout/stderr output separation, exit status code display, copy output helper, and token verification security.
+- **Command Execution**: Execute shell commands inside running containers from the TUI (`e` in the action panel) or the web dashboard modal. Features quick template shortcuts on web (directory list, environment variables, disk usage, etc.), stdout/stderr output separation, exit status code display, copy output helper, and token verification security.
 - **Token Security**: Secured control API and log endpoints with token verification. Automatically generates secure startup keys, supports guest/read-only mode, and stores session tokens in localStorage.
 - **Multi-language Support**: Interactive web dashboard supports language toggling between English and Chinese (via a button in the navigation header).
 - **Theme Toggle**: Real-time web dashboard supports toggling between light and dark themes (with automatic system color-scheme preference detection).
@@ -88,6 +88,7 @@ go run ./cmd/dockerview/
 | `x`         | Stop container    |
 | `r`         | Restart container |
 | `l`         | View logs         |
+| `e`         | Execute command   |
 | `q` / `Esc` | Back / Exit       |
 | `Ctrl+C`    | Exit application  |
 

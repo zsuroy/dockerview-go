@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.18] - 2026-07-06
+
+### Added
+
+- **TUI Container Command Execution (Exec)**: Added inline command execution to the terminal UI. Select a running container, press `e` in the action panel to enter exec mode, type a shell command, and view stdout/stderr output with exit code. Supports retry on error, running-state validation, and matches the web dashboard exec behavior via `sh -c`.
+
 ## [0.1.17] - 2026-07-03
 
 ### Fixed
