@@ -57,3 +57,106 @@ Open the **Settings** tab in the app to configure your connection:
   - For iOS Simulator or Web: Use `http://localhost:8080`.
 - **Security Token**: Enter the `-token` specified when launching `dockerview`. (Leave blank if you didn't configure a token).
 - Press **Save Changes** and click **Test Connection** to verify your setup.
+
+---
+
+## 🔧 Build a standalone APK
+
+### Prerequisites
+
+- Node.js 20+
+- Android Studio (for Android SDK)
+- Java 17+ (bundled with Android Studio)
+
+Set up Java environment:
+
+```bash
+# macOS (Android Studio bundled JDK)
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+Add these lines to `~/.zshrc` to make them permanent.
+
+### 1. Configure Android SDK
+
+Create `android/local.properties` pointing to your SDK:
+
+```bash
+echo "sdk.dir=$HOME/Library/Android/sdk" > android/local.properties
+```
+
+### 2. Allow HTTP (cleartext) traffic
+
+Android 9+ blocks HTTP by default. This is configured via `expo-build-properties` in [`app.json`](app.json):
+
+```json
+"plugins": [
+  [
+    "expo-build-properties",
+    { "android": { "usesCleartextTraffic": true } }
+  ]
+]
+```
+
+### 3. Prebuild & compile
+
+```bash
+# Generate the native Android project
+npx expo prebuild --platform android --clean
+
+# Compile release APK
+cd android
+./gradlew assembleRelease --parallel --build-cache
+
+# APK location: android/app/build/outputs/apk/release/
+```
+
+### Speed up builds
+
+Use Gradle daemon and parallel execution for faster incremental builds:
+
+```bash
+cd android
+./gradlew assembleRelease --parallel --build-cache --daemon --max-workers=8
+```
+
+- `--parallel` — run tasks in parallel across modules
+- `--build-cache` — cache build outputs across runs
+- `--daemon` — keep a warm JVM process for subsequent builds
+- `--max-workers=8` — use more concurrent workers
+
+### Memory tuning
+
+Gradle can run out of memory on large builds. Increase the JVM heap in [`android/gradle.properties`](android/gradle.properties):
+
+```properties
+org.gradle.jvmargs=-Xmx8g -XX:MaxMetaspaceSize=2048m
+```
+
+Also reduce the architectures you build for if testing locally:
+
+```properties
+reactNativeArchitectures=arm64-v8a
+```
+
+### Skip the device check
+
+`npx expo run:android` requires a connected device. Use gradle directly to compile without one (as shown above).
+
+### Java version issues
+
+If you see `Daemons could not be reused`, stop all daemons and retry:
+
+```bash
+cd android && ./gradlew --stop
+```
+
+### Need to re-prebuild?
+
+If the `android/` directory gets corrupted, clean and regenerate:
+
+```bash
+rm -rf android
+npx expo prebuild --platform android --clean
+```

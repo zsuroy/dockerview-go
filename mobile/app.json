@@ -8,9 +8,11 @@
     "scheme": "dockerview",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "cn.suroy.dockerview"
     },
     "android": {
+      "package": "cn.suroy.dockerview",
       "adaptiveIcon": {
         "backgroundColor": "#020617",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -31,6 +33,14 @@
           "backgroundColor": "#020617",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
       ]
     ],

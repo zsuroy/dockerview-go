@@ -266,7 +266,7 @@ function DetailSheet({
         setLogsLoading(false);
       }
     },
-    [authToken, container, serverUrl, t],
+    [authToken, container, logGrep, logLevel, logTail, serverUrl, t],
   );
 
   const selectTab = (nextTab: DetailTab) => {

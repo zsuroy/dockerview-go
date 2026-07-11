@@ -5,11 +5,9 @@ on:
     branches: [master]
     paths:
       - 'mobile/**'
-      - '.github/workflows/build-mobile.yml'
   pull_request:
     paths:
       - 'mobile/**'
-      - '.github/workflows/build-mobile.yml'
 
 concurrency:
   group: build-mobile-${{ github.ref }}
@@ -30,7 +28,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: mobile/package-lock.json
 
@@ -58,17 +56,17 @@ jobs:
             -storepass android -keypass android \
             -dname "CN=DockerView, OU=Mobile, O=DockerView, L=Unknown, S=Unknown, C=US"
 
-      - name: Configure release signing
-        run: |
-          {
-            echo "MYAPP_UPLOAD_STORE_FILE=release.keystore"
-            echo "MYAPP_UPLOAD_KEY_ALIAS=dockerview"
-            echo "MYAPP_UPLOAD_STORE_PASSWORD=android"
-            echo "MYAPP_UPLOAD_KEY_PASSWORD=android"
-          } >> android/gradle.properties
+      - name: Check node location
+        run: which node && node --version
 
       - name: Build release APK
-        run: cd android && ./gradlew assembleRelease --no-daemon
+        run: |
+          cd android && ./gradlew assembleRelease --no-daemon \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1024m" \
+            -PMYAPP_UPLOAD_STORE_FILE=release.keystore \
+            -PMYAPP_UPLOAD_KEY_ALIAS=dockerview \
+            -PMYAPP_UPLOAD_STORE_PASSWORD=android \
+            -PMYAPP_UPLOAD_KEY_PASSWORD=android
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -82,7 +80,7 @@ jobs:
   eas-build:
     name: EAS Build (Android & iOS)
     runs-on: ubuntu-latest
-    if: ${{ secrets.EXPO_TOKEN != '' }}
+    if: github.event_name == 'workflow_dispatch'
     defaults:
       run:
         working-directory: mobile
@@ -93,7 +91,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: mobile/package-lock.json
 
