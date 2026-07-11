@@ -5,9 +5,14 @@ on:
     branches: [master]
     paths:
       - 'mobile/**'
+    tags:
+      - 'v*'
   pull_request:
     paths:
       - 'mobile/**'
+
+permissions:
+  contents: write
 
 concurrency:
   group: build-mobile-${{ github.ref }}
@@ -68,12 +73,30 @@ jobs:
             -PMYAPP_UPLOAD_STORE_PASSWORD=android \
             -PMYAPP_UPLOAD_KEY_PASSWORD=android
 
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: dockerview-android-apk
           path: mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.VERSION }}
+          name: Release ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            mobile/android/app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Optional cloud builds (Android + iOS) via EAS. Requires an `EXPO_TOKEN` repository secret.
   # Configure Apple credentials in your EAS project for iOS builds.
