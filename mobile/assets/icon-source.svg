@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="38%" r="68%">
+      <stop offset="0%" stop-color="#1E3A5F"/>
+      <stop offset="58%" stop-color="#0B1220"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </radialGradient>
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#67E8F9"/>
+      <stop offset="48%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="glassGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.04"/>
+    </linearGradient>
+    <filter id="softGlow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="400" height="400" fill="url(#bgGrad)"/>
+  <circle cx="200" cy="180" r="142" fill="none" stroke="#67E8F9" stroke-width="1.5" opacity="0.08"/>
+  <circle cx="200" cy="180" r="92" fill="none" stroke="#34D399" stroke-width="1.5" opacity="0.10"/>
+  <path d="M80 184H320M200 45V315" stroke="#67E8F9" stroke-width="1" stroke-dasharray="6 8" opacity="0.09"/>
+
+  <g transform="translate(0,-6)" filter="url(#softGlow)">
+    <path d="M96 207Q96 172 132 166H270Q309 166 314 202L316 218Q318 250 277 257H151Q113 257 96 232Q84 214 96 207Z"
+      fill="#0F172A" stroke="url(#brandGrad)" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M302 193Q334 179 340 153Q343 139 331 148Q317 160 305 177M302 230Q334 244 340 270Q343 284 331 275Q317 263 305 246"
+      fill="none" stroke="url(#brandGrad)" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="126" cy="211" r="7" fill="#67E8F9"/>
+  </g>
+
+  <g stroke="url(#brandGrad)" stroke-width="5" fill="url(#glassGrad)" stroke-linejoin="round">
+    <rect x="124" y="127" width="34" height="40" rx="5"/>
+    <rect x="165" y="127" width="34" height="40" rx="5"/>
+    <rect x="206" y="127" width="34" height="40" rx="5"/>
+    <rect x="247" y="127" width="34" height="40" rx="5"/>
+    <rect x="146" y="82" width="34" height="40" rx="5"/>
+    <rect x="187" y="82" width="34" height="40" rx="5"/>
+    <rect x="228" y="82" width="34" height="40" rx="5"/>
+  </g>
+
+  <g transform="translate(286,223)">
+    <polygon points="0,-22 19,-11 19,11 0,22 -19,11 -19,-11" fill="#0B1220" stroke="#67E8F9" stroke-width="4"/>
+    <circle cx="0" cy="0" r="7" fill="#34D399"/>
+  </g>
+</svg>

@@ -18,7 +18,7 @@ go.work
 .idea/
 .vscode/
 *.swp
-*.swo
+*.sw
 
 # OS
 .DS_Store
@@ -26,7 +26,28 @@ Thumbs.db
 
 # Logs
 *.log
+npm-debug.log*
+yarn-error.log*
 
+# Node / Expo / React Native
+node_modules/
+.expo/
+mobile/dist/
+android/
+ios/
+*.keystore
+*.jks
+*.apk
+*.aab
+
+# Secrets / local env
+.env
+.env.local
+*.local
+
+# AI tooling
 .claude/
 .antigravitycli/
+
+# Build output
 build/

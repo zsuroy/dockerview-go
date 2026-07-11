@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.20] - 2026-07-11
+
+### Added
+
+- **Mobile Client (Expo / React Native)**: New cross-platform mobile app that connects to the DockerView-Go backend, featuring real-time monitoring, container start/stop/restart controls, log filtering, interactive command execution, and English / 简体中文 support.
+- **Mobile CI**: GitHub Actions workflow (`.github/workflows/build-mobile.yml`) builds a signed Android release APK as a downloadable artifact, with optional EAS cloud builds for Android & iOS (gated on an `EXPO_TOKEN` secret). Added `mobile/eas.json` profiles.
+- **Mobile Demo**: Added a mobile demo GIF referenced in the README.
+
 ## [0.1.19] - 2026-07-06
 
 ### Fixed

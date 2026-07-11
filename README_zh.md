@@ -34,6 +34,7 @@
 - **容器命令执行**：在终端（操作面板按 `e`）或 Web 端模态弹窗中直接在运行的容器内部执行 Shell 命令，并清晰展示退出码。Web 端内置常用快捷命令模板（如目录列出、环境变量、磁盘占用、当前用户等），支持标准输出/标准错误标色区分、一键复制输出及 Token 安全防护。
 - **Token 安全认证**：控制 API 和日志接口受 Token 保护，自动生成安全密钥，支持访客只读模式，Token 存储于 localStorage
 - **多语言支持**：Web 仪表盘支持中英文切换，可在顶部导航栏一键切换语言。
+- **移动客户端**：基于 Expo / React Native 的跨平台 App，在手机上镜像仪表盘功能——实时监控、启停/重启操作、日志过滤与命令执行，支持中文与 English。
 - **主题切换**：Web 仪表盘支持深色/浅色主题切换（支持自动检测系统主题偏好）。
 - **一键 Web 更新**：在页脚版本标牌旁直接触发基于浏览器的自动更新。系统将自动查询 GitHub 发布的最新 Release 版本，智能识别安装方式（`go install` 或 `binary`），安全执行原子替换，并实时推送详细的进度消息。
 - **端口映射可视化**：直接在仪表盘卡片上展示容器的端口映射与暴露端口。暴露端口展示为静态标签，已绑定的端口映射则显示为交互式标牌（例如 `8080 → 80/tcp`），点击可直接在浏览器中打开容器对应的 Web 页面。
@@ -130,6 +131,41 @@ DockerView-Go 自动检测 Docker Socket：
 DOCKER_HOST=unix:///path/to/docker.sock ./dockerview
 ```
 
+## 移动客户端
+
+DockerView 同时提供跨平台**移动客户端**（Expo / React Native），连接同一个 DockerView-Go 后端服务器，在手机上提供实时监控、容器生命周期操作（启停/重启）、日志过滤与交互式命令执行。
+
+![DockerView 移动端演示](assets/mobile.gif)
+
+### 环境要求
+
+- Node.js 20+
+- Expo CLI（`npm install -g expo-cli`）或使用 `npx expo`
+- 设备可访问运行中的 DockerView-Go 服务器（Android 模拟器使用 `10.0.2.2`，iOS/Web 使用 `localhost`）
+
+### 安装与运行
+
+```bash
+cd mobile
+npm install
+npx expo start          # 使用 Expo Go / 相机扫码
+npx expo start --android
+npx expo start --ios
+```
+
+在 App 内「设置」页面配置服务器地址与可选的安全 Token。App 支持中文与 English。
+
+### 构建独立安装包
+
+- **本地 Android APK**：GitHub 工作流 `.github/workflows/build-mobile.yml` 会自动预构建原生工程并编译签名 Release APK，作为工作流产物（Artifact）提供下载。
+- **云端构建（Android & iOS）**：配置仓库密钥 `EXPO_TOKEN`，配合 `eas.json` 的构建配置（`preview` / `production`）即可通过 EAS 构建。iOS 构建还需在 EAS 项目中配置 Apple 凭证。
+
+```bash
+cd mobile
+npx eas-cli build --platform android --profile preview   # 可安装的 APK
+npx eas-cli build --platform ios --profile production    # App Store / 内测分发
+```
+
 ## 构建命令
 
 ```bash
@@ -148,26 +184,31 @@ make clean      # 清理构建目录
 
 ```txt
 dockerview-go/
-├── cmd/dockerview/           # 主应用程序
+├── cmd/dockerview/           # 主终端应用（bubbletea）
 │   ├── main.go               # 入口
 │   ├── model.go              # TUI 模型
 │   ├── update.go             # 自动更新
 │   ├── utils.go              # 工具函数
 │   └── version.go            # 版本信息
-├── internal/docker/          # Docker 客户端
-│   ├── client.go             # Docker API 封装
-│   └── client_test.go        # 测试
-├── internal/server/          # HTTP & SSE 服务器
-│   ├── server.go             # 服务器逻辑与 API 端点
-│   └── web/                  # 编译后的 React UI 资源（自动嵌入）
-├── frontend/                 # React + TypeScript 前端应用
-│   ├── src/                  # React 源码（App.tsx、index.css、main.tsx 等）
-│   ├── index.html            # Vite 模板入口文件
-│   ├── vite.config.ts        # Vite 构建配置（输出到 internal/server/web）
-│   └── package.json          # Node 依赖，Tailwind v4 和 React
-├── .github/                  # CI/CD
-├── Makefile                  # 构建命令（构建 Go 时自动执行 build-ui）
-├── go.mod/go.sum             # Go 模块
+├── internal/
+│   ├── docker/               # Docker API 客户端与健康度评分
+│   ├── server/               # HTTP & SSE 服务器
+│   │   ├── server.go         # 服务器逻辑与 API 端点
+│   │   └── web/              # 编译后的 Web UI 资源（自动嵌入）
+│   └── version/              # 版本辅助
+├── frontend/                 # React + TypeScript Web 仪表盘（Vite）
+│   ├── src/                  # React 源码（App.tsx、组件、i18n 等）
+│   ├── index.html            # Vite 模板
+│   └── vite.config.ts        # 构建配置（输出到 internal/server/web）
+├── mobile/                   # Expo / React Native 移动客户端
+│   ├── app/                  # 页面（仪表盘、设置、关于）
+│   ├── components/           # 通用 UI 组件
+│   ├── utils/                # API 客户端、i18n（zh.ts / en.ts）、存储
+│   ├── app.json              # Expo 配置
+│   └── eas.json              # EAS 构建配置
+├── .github/workflows/        # CI：ci.yml、release.yml、build-mobile.yml
+├── Makefile                  # Go 构建命令
+├── go.mod / go.sum           # Go 模块
 └── README.md                 # 本文件
 ```
 

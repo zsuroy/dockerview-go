@@ -34,6 +34,7 @@ English | [中文](README_zh.md)
 - **Command Execution**: Execute shell commands inside running containers from the TUI (`e` in the action panel) or the web dashboard modal. Features quick template shortcuts on web (directory list, environment variables, disk usage, etc.), stdout/stderr output separation, exit status code display, copy output helper, and token verification security.
 - **Token Security**: Secured control API and log endpoints with token verification. Automatically generates secure startup keys, supports guest/read-only mode, and stores session tokens in localStorage.
 - **Multi-language Support**: Interactive web dashboard supports language toggling between English and Chinese (via a button in the navigation header).
+- **Mobile Client**: A cross-platform Expo / React Native app mirrors the dashboard on your phone — live monitoring, start/stop/restart controls, log filtering, and command execution, with English / 简体中文 support.
 - **Theme Toggle**: Real-time web dashboard supports toggling between light and dark themes (with automatic system color-scheme preference detection).
 - **One-Click Web Upgrade**: Trigger browser-based self-upgrades directly next to the version badge in the footer, which queries GitHub releases, automatically identifies the installation type (`go install` or `binary`), performs atomic updates, and streams step-by-step progress events in real-time.
 - **Port Mappings Visualizer**: Displays all container port mappings and exposed ports directly on the dashboard cards. Exposed ports render as clean tags, and mapped port mappings appear as interactive badges (e.g. `8080 → 80/tcp`) linking directly to the running container web interface.
@@ -130,6 +131,41 @@ DockerView-Go automatically detects Docker sockets:
 DOCKER_HOST=unix:///path/to/docker.sock ./dockerview
 ```
 
+## Mobile App
+
+DockerView also ships a cross-platform **mobile client** (Expo / React Native) that connects to the same DockerView-Go backend server and offers real-time monitoring, container lifecycle controls (start/stop/restart), log filtering, and interactive command execution from your phone.
+
+![DockerView Mobile Demo](assets/mobile.gif)
+
+### Requirements
+
+- Node.js 20+
+- Expo CLI (`npm install -g expo-cli`) or use `npx expo`
+- A running DockerView-Go server reachable from the device (use `10.0.2.2` for the Android emulator, `localhost` for iOS/Web)
+
+### Setup & Run
+
+```bash
+cd mobile
+npm install
+npx expo start          # scan the QR code with Expo Go / Camera
+npx expo start --android
+npx expo start --ios
+```
+
+Configure the server host address and optional security token from the in-app **Settings** screen. The app supports English and 简体中文.
+
+### Build a standalone app
+
+- **Local Android APK**: the GitHub workflow `.github/workflows/build-mobile.yml` prebuilds the native project and compiles a signed release APK, uploaded as a workflow artifact.
+- **Cloud builds (Android & iOS)**: configure an `EXPO_TOKEN` repository secret and push with `eas.json` profiles (`preview` / `production`). iOS builds additionally require Apple credentials set up in your EAS project.
+
+```bash
+cd mobile
+npx eas-cli build --platform android --profile preview   # installable APK
+npx eas-cli build --platform ios --profile production    # App Store / ad-hoc
+```
+
 ## Build Commands
 
 ```bash
@@ -148,26 +184,31 @@ make clean      # Clean build directory
 
 ```txt
 dockerview-go/
-├── cmd/dockerview/           # Main application
+├── cmd/dockerview/           # Main TUI application (bubbletea)
 │   ├── main.go               # Entry point
 │   ├── model.go              # TUI model
 │   ├── update.go             # Self-update
 │   ├── utils.go              # Utilities
 │   └── version.go            # Version info
-├── internal/docker/          # Docker client
-│   ├── client.go             # Docker API client
-│   └── client_test.go        # Tests
-├── internal/server/          # HTTP & SSE Server
-│   ├── server.go             # Server logic & API endpoints
-│   └── web/                  # Compiled React UI assets (embedded automatically)
-├── frontend/                 # React + TypeScript Frontend Application
-│   ├── src/                  # React source files (App.tsx, index.css, main.tsx, etc.)
-│   ├── index.html            # Vite template index file
-│   ├── vite.config.ts        # Vite build configurations (generates output in internal/server/web)
-│   └── package.json          # Node modules, Tailwind v4 and React dependencies
-├── .github/                  # CI/CD
-├── Makefile                  # Build commands (automatically runs build-ui when building Go)
-├── go.mod/go.sum             # Go modules
+├── internal/
+│   ├── docker/               # Docker API client & health scoring
+│   ├── server/               # HTTP & SSE server
+│   │   ├── server.go         # Server logic & API endpoints
+│   │   └── web/              # Compiled web UI assets (embedded automatically)
+│   └── version/              # Version helpers
+├── frontend/                 # React + TypeScript Web Dashboard (Vite)
+│   ├── src/                  # React source (App.tsx, components, i18n, ...)
+│   ├── index.html            # Vite template
+│   └── vite.config.ts        # Build config (outputs to internal/server/web)
+├── mobile/                   # Expo / React Native mobile client
+│   ├── app/                  # Screens (dashboard, settings, about)
+│   ├── components/           # Reusable UI components
+│   ├── utils/                # API client, i18n (zh.ts / en.ts), storage
+│   ├── app.json              # Expo config
+│   └── eas.json              # EAS Build profiles
+├── .github/workflows/        # CI: ci.yml, release.yml, build-mobile.yml
+├── Makefile                  # Go build commands
+├── go.mod / go.sum           # Go modules
 └── README.md                 # This file
 ```
 
