@@ -6,11 +6,14 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/zsuroy/dockerview-go/internal/audit"
 	"github.com/zsuroy/dockerview-go/internal/docker"
 	"github.com/zsuroy/dockerview-go/internal/server"
 
@@ -24,6 +27,9 @@ func main() {
 	enableServer := flag.Bool("server", false, "Enable HTTP server for real-time data")
 	serverPort := flag.Int("port", 8080, "Port for HTTP server")
 	serverToken := flag.String("token", "", "Security token for HTTP server (auto-generated if empty)")
+	auditDB := flag.String("audit-db", envOr("DOCKERVIEW_AUDIT_DB", "data/dockerview.db"), "Path to audit SQLite DB; use :memory: for tests, or empty to disable")
+	auditRetention := flag.Int("audit-retention-days", envIntOr("DOCKERVIEW_AUDIT_RETENTION_DAYS", 90), "Audit retention in days (0 disables pruning)")
+	auditDisable := flag.Bool("audit-disable", envBool("DOCKERVIEW_AUDIT_DISABLE"), "Disable audit logging entirely")
 	flag.Parse()
 
 	SetColor()
@@ -74,6 +80,34 @@ func main() {
 		fmt.Printf("[INFO] Security token: %s\n", token)
 
 		srv = server.NewServer(client, token, Version, Commit, Date)
+
+		// Configure audit recorder.
+		auditCfg := audit.DefaultConfig()
+		if *auditDB != "" {
+			auditCfg.DBPath = *auditDB
+		}
+		auditCfg.RetentionDays = *auditRetention
+		var auditer audit.Recorder
+		if *auditDisable || *auditDB == "" {
+			auditer = audit.NewNoop(auditCfg)
+			log.Printf("[WARN] Audit storage disabled")
+		} else {
+			var err error
+			auditer, err = audit.Open(auditCfg)
+			if err != nil {
+				log.Printf("[WARN] Audit storage unavailable (falling back to noop): %v", err)
+				auditer = audit.NewNoop(auditCfg)
+			} else {
+				log.Printf("[INFO] Audit DB: %s (retention=%dd)", auditCfg.DBPath, auditCfg.RetentionDays)
+			}
+		}
+		srv.SetAuditer(auditer)
+		defer func() {
+			if err := auditer.Close(); err != nil {
+				log.Printf("[WARN] audit close: %v", err)
+			}
+		}()
+
 		go func() {
 			if err := srv.Start(ctx, *serverPort); err != nil {
 				fmt.Fprintf(os.Stderr, "HTTP server error: %v\n", err)
@@ -158,6 +192,14 @@ func printHelp() {
 	fmt.Println("        Port for HTTP server (default 8080)")
 	fmt.Println("  -token string")
 	fmt.Println("        Security token for HTTP server (auto-generated if empty)")
+	fmt.Println("  -audit-db path")
+	fmt.Println("        SQLite path for the audit log (default data/dockerview.db; set empty to disable)")
+	fmt.Println("  -audit-retention-days int")
+	fmt.Println("        Audit retention window; older rows pruned hourly (default 90, 0 disables)")
+	fmt.Println("  -audit-disable")
+	fmt.Println("        Disable audit storage; /api/audit endpoints return empty")
+	fmt.Println("  -no-docker")
+	fmt.Println("        Skip Docker client connection (test/stub mode)")
 	fmt.Println("  -help")
 	fmt.Println("        Show this help message")
 	fmt.Println("  -version")
@@ -184,4 +226,29 @@ func printHelp() {
 	fmt.Println("  DOCKER_HOST=unix:///path/to/docker.sock dockerview")
 	fmt.Println()
 	fmt.Println("For more information, visit: https://github.com/zsuroy/dockerview-go")
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func envIntOr(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
+func envBool(key string) bool {
+	v := os.Getenv(key)
+	switch v {
+	case "1", "true", "TRUE", "yes", "YES":
+		return true
+	}
+	return false
 }

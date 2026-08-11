@@ -1,4 +1,4 @@
-import { Search, Languages, Sun, Moon } from 'lucide-react';
+import { Search, Languages, Sun, Moon, Trash2 } from 'lucide-react';
 import { basePath } from '../utils';
 import { useTranslation } from '../i18n';
 import type { Theme } from '../hooks/useTheme';
@@ -15,6 +15,7 @@ interface HeaderProps {
   setFilterKey: (f: 'all' | 'running' | 'stopped') => void;
   theme: Theme;
   onToggleTheme: () => void;
+  onCleanup: () => void;
 }
 
 export function Header({
@@ -22,7 +23,7 @@ export function Header({
   searchQuery, setSearchQuery,
   sortKey, setSortKey,
   filterKey, setFilterKey,
-  theme, onToggleTheme
+  theme, onToggleTheme, onCleanup
 }: HeaderProps) {
   const { t, language, toggleLanguage } = useTranslation();
 
@@ -108,6 +109,14 @@ export function Header({
 
       {/* Language & Theme Controls */}
       <div className="flex items-center gap-2 break-inside-avoid">
+        <button
+          onClick={onCleanup}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold tracking-wide rounded-lg bg-danger/10 hover:bg-danger/20 border border-danger/30 hover:border-danger/50 text-danger transition-all cursor-pointer"
+          title={t('header.cleanupTooltip')}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          {t('header.cleanup')}
+        </button>
         <button
           onClick={toggleLanguage}
           className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold tracking-wide rounded-lg bg-surface-1 hover:bg-surface-2 border border-border-subtle hover:border-border-default text-text-dim hover:text-text transition-all cursor-pointer"

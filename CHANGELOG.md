@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21] - 2026-08-11
+
+### Added
+
+- **Operation Audit Center**: New web view for container operation audit. Tracks start/stop/restart/exec operations with actor identity, source, timestamp, container, result, duration, and optional payload. Accessible via the "AUDIT" tab in the web dashboard.
+- **Audit Backend**: New `internal/audit` package with SQLite-backed event store, configurable retention, and noop fallback. Backend exposes `/api/audit` (paginated list with filters), `/api/audit/stats` (aggregates), and `/api/audit/export` (JSON/Markdown download). Auth reuse via `checkAuthEx`/`resolvedActor`.
+- **Audit Persistence**: Events are recorded from `/api/container/op` and `/api/container/exec` handlers with correlation IDs, client IP, user-agent, and sanitized payload (command truncated for privacy).
+- **Audit Frontend**: React hook `useAudit` manages pagination, filters (since/until, container ID/name, action/result chips, sort, limit), polling, and export URLs. Components: `AuditPanel`, `AuditTable`, `AuditFiltersBar`. i18n keys added for English and 简体中文.
+- **Server Audit Flags**: New CLI flags `-audit-db`, `-audit-retention-days`, `-audit-disable` to control audit storage path, retention window, and enable/disable.
+- **Disk Cleanup (Prune)**: New "CLEANUP" button in the web dashboard header opens a prune modal that lists unused images (including tagged images with no container references, matching `docker image prune -a` behavior) and dangling/unused volumes. Users can select items, run a dry-run preview, confirm deletion, and view a result summary with audit log.
+- **Prune Audit Log**: Admins can view a prune audit log showing actor, timestamp, status, deleted/failed/skipped counts, reclaimed bytes, and IP. Audit events are exposed via `/api/prune/audit` and rendered in the prune modal.
+- **Prune Backend API**: Four new server endpoints (`/api/prune/candidates`, `/api/prune/dry-run`, `/api/prune/confirm`, `/api/prune/audit`) with token authentication (query param, `X-Auth-Token` header, or Bearer token), constant-time token comparison, and CORS-safe JSON responses.
+- **TUI Table Width**: Increased TUI table column widths (Name 20→22, Status 18→24, separator 102→114) to prevent truncation of long container names and status strings.
+
+### Fixed
+
+- **Prune Selection Preservation**: Fixed a bug where the dry-run step would silently replace the user's original selection with the dry-run's candidate set, causing "select all" to appear to delete nothing when the candidate set changed between list and dry-run.
+- **Prune Stale Candidates After Delete**: After a successful prune, the local candidate list is immediately updated to remove deleted items, preventing stale entries from appearing on the next refresh before Docker's `DiskUsage` cache reconciles.
+- **Prune Ghost Images After Deletion**: After deleting unused tagged images, Docker may leave behind dangling layers that appear as new image IDs on refresh. The confirm step now automatically runs `ImagesPrune` to clean up these ghost layers.
+- **Audit Log TUI Pollution**: Removed `log.Printf` audit output that was writing prune audit events to the terminal outside the TUI, cluttering the screen below the bubbletea UI.
+
 ## [0.1.20] - 2026-07-11
 
 ### Added

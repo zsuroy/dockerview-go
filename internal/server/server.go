@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/client"
+	"github.com/zsuroy/dockerview-go/internal/audit"
 	"github.com/zsuroy/dockerview-go/internal/docker"
 	"github.com/zsuroy/dockerview-go/internal/version"
 )
@@ -27,6 +29,9 @@ type Server struct {
 	currentData    []docker.ContainerInfo
 	dashboard      []byte
 	dockerClient   *client.Client
+	pruner         *docker.Pruner
+	audit          *auditLog
+	auditer        audit.Recorder
 	token          string
 	currentVersion string
 	commit         string
@@ -38,10 +43,16 @@ type Server struct {
 // NewServer creates a new Server instance.
 func NewServer(cli *client.Client, token string, currentVersion, commit, buildDate string) *Server {
 	data, _ := webContent.ReadFile("web/index.html")
+	var pruner *docker.Pruner
+	if cli != nil {
+		pruner = docker.NewPruner(cli)
+	}
 	return &Server{
 		clients:        make(map[chan []docker.ContainerInfo]bool),
 		dashboard:      data,
 		dockerClient:   cli,
+		pruner:         pruner,
+		audit:          newAuditLog(),
 		token:          token,
 		currentVersion: currentVersion,
 		commit:         commit,
@@ -49,36 +60,36 @@ func NewServer(cli *client.Client, token string, currentVersion, commit, buildDa
 	}
 }
 
+// SetAuditer installs (or replaces) the audit recorder. If nil, a no-op
+// recorder is used so audit endpoints return 503 but don't crash.
+func (s *Server) SetAuditer(r audit.Recorder) {
+	if r == nil {
+		r = audit.NewNoop(audit.DefaultConfig())
+	}
+	s.auditer = r
+}
+
+// aud returns the installed recorder, or a safe noop if none.
+func (s *Server) aud() audit.Recorder {
+	if s.auditer == nil {
+		return audit.NewNoop(audit.DefaultConfig())
+	}
+	return s.auditer
+}
+
+// secureEqual compares two strings in constant time. It returns false early when
+// lengths differ (the length of the configured token is not secret).
+func secureEqual(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
 // checkAuth checks if the request is authenticated.
 func (s *Server) checkAuth(w http.ResponseWriter, r *http.Request) bool {
-	if s.token == "" {
-		return true // No security configured
-	}
-
-	// 1. Check query param
-	token := r.URL.Query().Get("token")
-	if token == s.token {
-		return true
-	}
-
-	// 2. Check header X-Auth-Token
-	if r.Header.Get("X-Auth-Token") == s.token {
-		return true
-	}
-
-	// 3. Check Authorization Bearer header
-	authHeader := r.Header.Get("Authorization")
-	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-		if authHeader[7:] == s.token {
-			return true
-		}
-	}
-
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte("Unauthorized: Invalid or missing security token"))
-	return false
+	_, ok := s.checkAuthEx(w, r)
+	return ok
 }
 
 // UpdateData updates the current container data and broadcasts it to all connected clients.
@@ -101,8 +112,9 @@ func (s *Server) UpdateData(data []docker.ContainerInfo) {
 	}
 }
 
-// Start starts the HTTP server on the specified port.
-func (s *Server) Start(ctx context.Context, port int) error {
+// Handler returns the HTTP handler for the server, including CORS wrapping and
+// all registered routes. It is used by Start and is also useful for tests.
+func (s *Server) Handler() http.Handler {
 	webFS, _ := fs.Sub(webContent, "web")
 	fileServer := http.FileServer(http.FS(webFS))
 
@@ -115,6 +127,13 @@ func (s *Server) Start(ctx context.Context, port int) error {
 	mux.HandleFunc("/api/container/exec", s.handleContainerExec)
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/api/upgrade", s.handleUpgrade)
+	mux.HandleFunc("/api/prune/candidates", s.handlePruneCandidates)
+	mux.HandleFunc("/api/prune/dry-run", s.handlePruneDryRun)
+	mux.HandleFunc("/api/prune/confirm", s.handlePruneConfirm)
+	mux.HandleFunc("/api/prune/audit", s.handlePruneAudit)
+	mux.HandleFunc("/api/audit", s.handleAudit)
+	mux.HandleFunc("/api/audit/export", s.handleAuditExport)
+	mux.HandleFunc("/api/audit/stats", s.handleAuditStats)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Try to serve static file; if not found, fall back to index.html (SPA)
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -132,20 +151,24 @@ func (s *Server) Start(ctx context.Context, port int) error {
 		s.handleDashboard(w, r)
 	})
 
-	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token, Authorization, X-Request-Id")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Request-Id, Content-Disposition")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
 
+// Start starts the HTTP server on the specified port.
+func (s *Server) Start(ctx context.Context, port int) error {
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: corsHandler,
+		Handler: s.Handler(),
 	}
 
 	errChan := make(chan error, 1)
@@ -240,20 +263,63 @@ func sendSSE(w http.ResponseWriter, data []docker.ContainerInfo) error {
 }
 
 func (s *Server) handleContainerOp(w http.ResponseWriter, r *http.Request) {
-	if !s.checkAuth(w, r) {
-		return
-	}
-
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	started := time.Now()
+	actorV, kindV, sourceV, ipV, uaV := audit.ActorFromRequest(r, "")
+	ra, authed := s.checkAuthEx(w, r)
+	if authed {
+		actorV, kindV, sourceV, ipV, uaV = ra.auditActor(r)
+	}
+
 	id := r.URL.Query().Get("id")
 	op := r.URL.Query().Get("op")
+	opName := op
+	if opName == "" {
+		opName = audit.ActionOp
+	}
+
+	correlationID := r.Header.Get("X-Request-Id")
+	record := func(result string, status int, detail string) {
+		s.aud().Record(r.Context(), audit.Event{
+			Time:          started,
+			Actor:         actorV,
+			ActorKind:     kindV,
+			Source:        sourceV,
+			Action:        opName,
+			ContainerID:   id,
+			ContainerName: s.lookupName(id),
+			Result:        result,
+			StatusCode:    status,
+			DurationMs:    time.Since(started).Milliseconds(),
+			Detail:        detail,
+			ClientIP:      ipV,
+			UserAgent:     uaV,
+			RequestID:     correlationID,
+			Payload:       map[string]any{"op": op},
+		})
+	}
+
+	if !authed {
+		record(audit.ResultDenied, http.StatusUnauthorized, "invalid or missing token")
+		return
+	}
+
 	if id == "" || op == "" {
 		http.Error(w, "Missing 'id' or 'op' parameter", http.StatusBadRequest)
+		record(audit.ResultFailure, http.StatusBadRequest, "missing id or op")
+		return
+	}
+
+	switch op {
+	case "start", "stop", "restart":
+	default:
+		http.Error(w, fmt.Sprintf("Unknown operation: %s", op), http.StatusBadRequest)
+		record(audit.ResultFailure, http.StatusBadRequest, "unknown op: "+op)
 		return
 	}
 
@@ -263,18 +329,22 @@ func (s *Server) handleContainerOp(w http.ResponseWriter, r *http.Request) {
 
 	if cli == nil {
 		http.Error(w, "Docker client not available", http.StatusServiceUnavailable)
+		record(audit.ResultFailure, http.StatusServiceUnavailable, "docker client not available")
 		return
 	}
 
 	err := docker.ContainerOp(r.Context(), cli, id, op)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to perform operation: %v", err), http.StatusInternalServerError)
+		msg := fmt.Sprintf("Failed to perform operation: %v", err)
+		http.Error(w, msg, http.StatusInternalServerError)
+		record(audit.ResultFailure, http.StatusInternalServerError, msg)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "op": op})
+	record(audit.ResultSuccess, http.StatusOK, "")
 }
 
 func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
@@ -475,19 +545,53 @@ func (s *Server) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleContainerExec(w http.ResponseWriter, r *http.Request) {
-	if !s.checkAuth(w, r) {
-		return
-	}
-
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	started := time.Now()
+	actorV, kindV, sourceV, ipV, uaV := audit.ActorFromRequest(r, "")
+	ra, authed := s.checkAuthEx(w, r)
+	if authed {
+		actorV, kindV, sourceV, ipV, uaV = ra.auditActor(r)
+	}
+
 	id := r.URL.Query().Get("id")
+	correlationID := r.Header.Get("X-Request-Id")
+
+	record := func(result string, status int, detail string, payload map[string]any) {
+		if cmd, ok := payload["cmd"].(string); ok && len(cmd) > audit.MaxCmdChars {
+			payload["cmd"] = cmd[:audit.MaxCmdChars] + "…"
+		}
+		s.aud().Record(r.Context(), audit.Event{
+			Time:          started,
+			Actor:         actorV,
+			ActorKind:     kindV,
+			Source:        sourceV,
+			Action:        audit.ActionExec,
+			ContainerID:   id,
+			ContainerName: s.lookupName(id),
+			Result:        result,
+			StatusCode:    status,
+			DurationMs:    time.Since(started).Milliseconds(),
+			Detail:        detail,
+			ClientIP:      ipV,
+			UserAgent:     uaV,
+			RequestID:     correlationID,
+			Payload:       payload,
+		})
+	}
+
+	if !authed {
+		record(audit.ResultDenied, http.StatusUnauthorized, "invalid or missing token", nil)
+		return
+	}
+
 	if id == "" {
 		http.Error(w, "Missing 'id' parameter", http.StatusBadRequest)
+		record(audit.ResultFailure, http.StatusBadRequest, "missing id", nil)
 		return
 	}
 
@@ -497,17 +601,21 @@ func (s *Server) handleContainerExec(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		record(audit.ResultFailure, http.StatusBadRequest, "invalid request body", nil)
 		return
 	}
 
 	var cmd []string
+	var rawCmd interface{}
 	switch v := reqBody.Cmd.(type) {
 	case string:
 		if strings.TrimSpace(v) == "" {
 			http.Error(w, "Empty command", http.StatusBadRequest)
+			record(audit.ResultFailure, http.StatusBadRequest, "empty command", nil)
 			return
 		}
 		cmd = []string{"sh", "-c", v}
+		rawCmd = v
 	case []interface{}:
 		for _, item := range v {
 			if str, ok := item.(string); ok {
@@ -516,13 +624,16 @@ func (s *Server) handleContainerExec(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		rawCmd = cmd
 	default:
 		http.Error(w, "Invalid 'cmd' parameter (must be string or array of strings)", http.StatusBadRequest)
+		record(audit.ResultFailure, http.StatusBadRequest, "invalid cmd type", nil)
 		return
 	}
 
 	if len(cmd) == 0 {
 		http.Error(w, "Empty command", http.StatusBadRequest)
+		record(audit.ResultFailure, http.StatusBadRequest, "empty command", nil)
 		return
 	}
 
@@ -530,18 +641,44 @@ func (s *Server) handleContainerExec(w http.ResponseWriter, r *http.Request) {
 	cli := s.dockerClient
 	s.mu.RUnlock()
 
+	payload := map[string]any{"cmd": rawCmd}
 	if cli == nil {
 		http.Error(w, "Docker client not available", http.StatusServiceUnavailable)
+		record(audit.ResultFailure, http.StatusServiceUnavailable, "docker client not available", payload)
 		return
 	}
 
 	result, err := docker.ContainerExec(r.Context(), cli, id, cmd)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to execute command: %v", err), http.StatusInternalServerError)
+		msg := fmt.Sprintf("Failed to execute command: %v", err)
+		http.Error(w, msg, http.StatusInternalServerError)
+		record(audit.ResultFailure, http.StatusInternalServerError, msg, payload)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(result)
+	payload["exit_code"] = result.ExitCode
+	record(audit.ResultSuccess, http.StatusOK, "", payload)
+}
+
+// lookupName returns the container name from the most recent snapshot, or ""
+// when unknown. It's a best-effort enrichment for the audit row.
+func (s *Server) lookupName(id string) string {
+	if id == "" {
+		return ""
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	norm := id
+	if strings.HasPrefix(norm, "sha256:") {
+		norm = norm[7:]
+	}
+	for _, c := range s.currentData {
+		if c.FullID == id || c.FullID == norm || strings.HasPrefix(c.FullID, norm) || c.ID == id || strings.HasPrefix(id, c.ID) {
+			return c.Name
+		}
+	}
+	return ""
 }

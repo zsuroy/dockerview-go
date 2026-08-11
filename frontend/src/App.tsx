@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
+import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid } from 'lucide-react';
 import type { ToastMessage } from './types';
 import { formatBytes, basePath } from './utils';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -11,6 +11,8 @@ import { ContainerCard } from './components/ContainerCard';
 import { AuthModal } from './components/AuthModal';
 import { LogsModal } from './components/LogsModal';
 import { ExecModal } from './components/ExecModal';
+import { PruneModal } from './components/PruneModal';
+import { AuditPanel } from './components/AuditPanel';
 
 interface VersionInfo {
   current_version: string;
@@ -41,6 +43,7 @@ export default function App() {
   });
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authError, setAuthError] = useState<boolean>(false);
+  const [showPruneModal, setShowPruneModal] = useState<boolean>(false);
 
   // Pending action stored as data (not a function closure) to avoid stale closure bugs.
   // The function-closure approach captured an old performOp/handleOpenLogs with an empty
@@ -49,8 +52,13 @@ export default function App() {
     | { kind: 'op'; containerId: string; op: 'start' | 'stop' | 'restart'; containerName: string }
     | { kind: 'logs'; containerId: string; containerName: string }
     | { kind: 'exec'; containerId: string; containerName: string }
-    | { kind: 'upgrade' };
+    | { kind: 'upgrade' }
+    | { kind: 'prune' }
+    | { kind: 'audit' };
   const [pendingAction, setPendingAction] = useState<PendingActionType | null>(null);
+
+  // Active top-level view: containers or audit
+  const [view, setView] = useState<'containers' | 'audit'>('containers');
 
   // Modals & Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -262,6 +270,12 @@ export default function App() {
     setExecContainer({ id, name });
   };
 
+  // Open the cleanup (prune) modal. The list/dry-run are guest-readable; if the
+  // user later tries to delete without a token, PruneModal triggers auth.
+  const handleOpenPrune = useCallback(() => {
+    setShowPruneModal(true);
+  }, []);
+
   const handleVerifyToken = (token: string) => {
     setServerToken(token);
     localStorage.setItem('dockerview_token', token);
@@ -281,9 +295,24 @@ export default function App() {
         handleOpenExec(action.containerId, action.containerName, token);
       } else if (action.kind === 'upgrade') {
         handleUpgrade(token);
+      } else if (action.kind === 'prune') {
+        setShowPruneModal(true);
+      } else if (action.kind === 'audit') {
+        setView('audit');
       }
     }
   };
+
+  // When opening audit without a token, prompt for auth.
+  const handleAuditNav = useCallback(() => {
+    if (!serverToken) {
+      setPendingAction({ kind: 'audit' });
+      setAuthError(false);
+      setShowAuthModal(true);
+      return;
+    }
+    setView('audit');
+  }, [serverToken]);
 
   return (
     <div className="relative min-h-screen">
@@ -303,20 +332,51 @@ export default function App() {
           setFilterKey={setFilterKey}
           theme={theme}
           onToggleTheme={toggleTheme}
+          onCleanup={handleOpenPrune}
         />
 
-        {/* Aggregate Stats Dashboard */}
-        <SummaryDashboard
-          total={containers.length}
-          active={runningCount}
-          avgCpu={avgCpu}
-          peakMemory={formatBytes(peakMemory)}
-          healthyCount={healthyCount}
-          warningCount={warningCount}
-          dangerousCount={dangerousCount}
-        />
+        {/* View toggle (containers | audit) */}
+        <div className="flex items-center gap-2 mb-5 mt-[18px]">
+          <button
+            onClick={() => setView('containers')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[12px] tracking-wider uppercase border transition-all ${view === 'containers' ? 'bg-accent-cyan/15 border-accent-cyan/50 text-accent-cyan' : 'bg-surface-1 border-border-light text-text-dim hover:text-text'}`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />{t('app.navContainers')}
+          </button>
+          <button
+            onClick={handleAuditNav}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[12px] tracking-wider uppercase border transition-all ${view === 'audit' ? 'bg-accent-cyan/15 border-accent-cyan/50 text-accent-cyan' : 'bg-surface-1 border-border-light text-text-dim hover:text-text'}`}
+            data-testid="nav-audit"
+          >
+            <ClipboardList className="w-3.5 h-3.5" />{t('app.navAudit')}
+          </button>
+        </div>
 
-        {/* Container Lists */}
+        {view === 'audit' ? (
+          <AuditPanel
+            token={serverToken}
+            onAuthRequired={() => {
+              localStorage.removeItem('dockerview_token');
+              setServerToken('');
+              setPendingAction({ kind: 'audit' });
+              setAuthError(true);
+              setShowAuthModal(true);
+            }}
+          />
+         ) : (
+           <>
+             {/* Aggregate Stats Dashboard */}
+             <SummaryDashboard
+               total={containers.length}
+               active={runningCount}
+               avgCpu={avgCpu}
+               peakMemory={formatBytes(peakMemory)}
+               healthyCount={healthyCount}
+               warningCount={warningCount}
+               dangerousCount={dangerousCount}
+             />
+
+             {/* Container Lists */}
         {filteredContainers.length > 0 ? (
           <div className="space-y-[50px]">
             {/* Active grid */}
@@ -376,10 +436,12 @@ export default function App() {
               </div>
             )}
           </div>
-        ) : (
-          <div className="text-center py-[60px] text-text-dim font-semibold text-[14px]">
-            {t('app.noContainers')}
-          </div>
+         ) : (
+           <div className="text-center py-[60px] text-text-dim font-semibold text-[14px]">
+             {t('app.noContainers')}
+           </div>
+           )}
+          </>
         )}
 
         {/* Footer */}
@@ -502,6 +564,25 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Disk Cleanup (prune) Modal — list → dry-run → confirm → result */}
+      <PruneModal
+        open={showPruneModal}
+        onOpenChange={setShowPruneModal}
+        serverToken={serverToken}
+        onToast={showToast}
+        onAuthRequired={() => {
+          // Close the prune modal before opening the auth modal to avoid two
+          // stacked dialogs fighting for focus; the pending action reopens it
+          // after a successful token verification.
+          setShowPruneModal(false);
+          localStorage.removeItem('dockerview_token');
+          setServerToken('');
+          setPendingAction({ kind: 'prune' });
+          setAuthError(true);
+          setShowAuthModal(true);
+        }}
+      />
 
       {/* Dynamic Toast Messages */}
       <div className="fixed bottom-[30px] right-[30px] flex flex-col gap-2.5 z-[2000]">
