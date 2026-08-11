@@ -18,21 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Prune Audit Log**: Admins can view a prune audit log showing actor, timestamp, status, deleted/failed/skipped counts, reclaimed bytes, and IP. Audit events are exposed via `/api/prune/audit` and rendered in the prune modal.
 - **Prune Backend API**: Four new server endpoints (`/api/prune/candidates`, `/api/prune/dry-run`, `/api/prune/confirm`, `/api/prune/audit`) with token authentication (query param, `X-Auth-Token` header, or Bearer token), constant-time token comparison, and CORS-safe JSON responses.
 - **TUI Table Width**: Increased TUI table column widths (Name 20→22, Status 18→24, separator 102→114) to prevent truncation of long container names and status strings.
-
-### Fixed
-
-- **Prune Selection Preservation**: Fixed a bug where the dry-run step would silently replace the user's original selection with the dry-run's candidate set, causing "select all" to appear to delete nothing when the candidate set changed between list and dry-run.
-- **Prune Stale Candidates After Delete**: After a successful prune, the local candidate list is immediately updated to remove deleted items, preventing stale entries from appearing on the next refresh before Docker's `DiskUsage` cache reconciles.
-- **Prune Ghost Images After Deletion**: After deleting unused tagged images, Docker may leave behind dangling layers that appear as new image IDs on refresh. The confirm step now automatically runs `ImagesPrune` to clean up these ghost layers.
-- **Audit Log TUI Pollution**: Removed `log.Printf` audit output that was writing prune audit events to the terminal outside the TUI, cluttering the screen below the bubbletea UI.
-
-## [0.1.20] - 2026-07-11
-
-### Added
-
 - **Mobile Client (Expo / React Native)**: New cross-platform mobile app that connects to the DockerView-Go backend, featuring real-time monitoring, container start/stop/restart controls, log filtering, interactive command execution, and English / 简体中文 support.
 - **Mobile CI**: GitHub Actions workflow (`.github/workflows/build-mobile.yml`) builds a signed Android release APK as a downloadable artifact, with optional EAS cloud builds for Android & iOS (gated on an `EXPO_TOKEN` secret). Added `mobile/eas.json` profiles.
 - **Mobile Demo**: Added a mobile demo GIF referenced in the README.
+
 
 ## [0.1.19] - 2026-07-06
 
