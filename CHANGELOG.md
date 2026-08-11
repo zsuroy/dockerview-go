@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Operation Audit Center**: New web view for container operation audit. Tracks start/stop/restart/exec operations with actor identity, source, timestamp, container, result, duration, and optional payload. Accessible via the "AUDIT" tab in the web dashboard.
+- **Audit Backend**: New `internal/audit` package with SQLite-backed event store, configurable retention, and noop fallback. Backend exposes `/api/audit` (paginated list with filters), `/api/audit/stats` (aggregates), and `/api/audit/export` (JSON/Markdown download). Auth reuse via `checkAuthEx`/`resolvedActor`.
+- **Audit Persistence**: Events are recorded from `/api/container/op` and `/api/container/exec` handlers with correlation IDs, client IP, user-agent, and sanitized payload (command truncated for privacy).
+- **Audit Frontend**: React hook `useAudit` manages pagination, filters (since/until, container ID/name, action/result chips, sort, limit), polling, and export URLs. Components: `AuditPanel`, `AuditTable`, `AuditFiltersBar`. i18n keys added for English and 简体中文.
+- **Server Audit Flags**: New CLI flags `-audit-db`, `-audit-retention-days`, `-audit-disable` to control audit storage path, retention window, and enable/disable.
 - **Disk Cleanup (Prune)**: New "CLEANUP" button in the web dashboard header opens a prune modal that lists unused images (including tagged images with no container references, matching `docker image prune -a` behavior) and dangling/unused volumes. Users can select items, run a dry-run preview, confirm deletion, and view a result summary with audit log.
 - **Prune Audit Log**: Admins can view a prune audit log showing actor, timestamp, status, deleted/failed/skipped counts, reclaimed bytes, and IP. Audit events are exposed via `/api/prune/audit` and rendered in the prune modal.
 - **Prune Backend API**: Four new server endpoints (`/api/prune/candidates`, `/api/prune/dry-run`, `/api/prune/confirm`, `/api/prune/audit`) with token authentication (query param, `X-Auth-Token` header, or Bearer token), constant-time token comparison, and CORS-safe JSON responses.

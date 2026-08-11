@@ -39,6 +39,7 @@ English | [中文](README_zh.md)
 - **One-Click Web Upgrade**: Trigger browser-based self-upgrades directly next to the version badge in the footer, which queries GitHub releases, automatically identifies the installation type (`go install` or `binary`), performs atomic updates, and streams step-by-step progress events in real-time.
 - **Port Mappings Visualizer**: Displays all container port mappings and exposed ports directly on the dashboard cards. Exposed ports render as clean tags, and mapped port mappings appear as interactive badges (e.g. `8080 → 80/tcp`) linking directly to the running container web interface.
 - **Disk Cleanup (Prune)**: Clean up unused images and dangling volumes from the web dashboard. Preview candidates with a dry-run, confirm deletion with an explicit acknowledgement, and view a detailed result summary with audit log. Guests can preview; admin token is required to delete.
+- **Operation Audit Center**: Track who did what, when, to which container. Key write operations (start, stop, restart, exec) are persisted to an audit log with actor identity, source, timestamp, container, result, duration, and request context. The web dashboard provides a searchable audit view with filters, pagination, and JSON/Markdown export.
 - **Color-coded Status**: Green for running, red for stopped/exited containers.
 - **CPU Alerts**: High CPU usage (>50%) highlighted in red.
 - **Auto-detection**: Automatically detects Docker socket (including Unix sockets, WSL, Colima, OrbStack, Podman, Rancher Desktop, etc.).
