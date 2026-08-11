@@ -22,13 +22,13 @@ func TestHashActorStable(t *testing.T) {
 
 func TestDeriveSource(t *testing.T) {
 	cases := map[string]string{
-		"Mozilla/5.0 (X11; Linux) AppleWebKit/537.36":                   SourceWeb,
-		"DockerviewMobile/1.0 (iOS)":                                    SourceMobile,
-		"Expo/57 (Android)":                                             SourceMobile,
-		"curl/8.5.0":                                                    SourceAPI,
-		"Wget/1.21":                                                     SourceAPI,
-		"":                                                              SourceUnknown,
-		"CustomClient/1.0":                                              SourceAPI,
+		"Mozilla/5.0 (X11; Linux) AppleWebKit/537.36": SourceWeb,
+		"DockerviewMobile/1.0 (iOS)":                  SourceMobile,
+		"Expo/57 (Android)":                           SourceMobile,
+		"curl/8.5.0":                                  SourceAPI,
+		"Wget/1.21":                                   SourceAPI,
+		"":                                            SourceUnknown,
+		"CustomClient/1.0":                            SourceAPI,
 	}
 	for ua, want := range cases {
 		if got := DeriveSource(ua); got != want {
