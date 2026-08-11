@@ -142,7 +142,7 @@ func (s *Server) handleAuditExport(w http.ResponseWriter, r *http.Request) {
 		s.aud().Record(r.Context(), audit.Event{
 			Action: audit.ActionAudit, Result: audit.ResultDenied, StatusCode: http.StatusUnauthorized,
 			Detail: "invalid or missing token on /api/audit/export",
-			Actor: actorV, ActorKind: kindV, Source: sourceV, ClientIP: ipV, UserAgent: uaV,
+			Actor:  actorV, ActorKind: kindV, Source: sourceV, ClientIP: ipV, UserAgent: uaV,
 			RequestID: r.Header.Get("X-Request-Id"),
 		})
 		return
@@ -183,7 +183,7 @@ func (s *Server) handleAuditStats(w http.ResponseWriter, r *http.Request) {
 		s.aud().Record(r.Context(), audit.Event{
 			Action: audit.ActionAudit, Result: audit.ResultDenied, StatusCode: http.StatusUnauthorized,
 			Detail: "invalid or missing token on /api/audit/stats",
-			Actor: actorV, ActorKind: kindV, Source: sourceV, ClientIP: ipV, UserAgent: uaV,
+			Actor:  actorV, ActorKind: kindV, Source: sourceV, ClientIP: ipV, UserAgent: uaV,
 			RequestID: r.Header.Get("X-Request-Id"),
 		})
 		return

@@ -49,10 +49,10 @@ const (
 
 // Source values classifying the calling client.
 const (
-	SourceWeb   = "web"
-	SourceMobile = "mobile"
-	SourceAPI   = "api"
-	SourceCLI   = "cli"
+	SourceWeb     = "web"
+	SourceMobile  = "mobile"
+	SourceAPI     = "api"
+	SourceCLI     = "cli"
 	SourceUnknown = "unknown"
 )
 
@@ -107,12 +107,12 @@ type Query struct {
 
 // Page is a paginated list response.
 type Page struct {
-	Total   int64       `json:"total"`
-	Count   int         `json:"count"`
-	Offset  int         `json:"offset"`
-	Limit   int         `json:"limit"`
+	Total   int64          `json:"total"`
+	Count   int            `json:"count"`
+	Offset  int            `json:"offset"`
+	Limit   int            `json:"limit"`
 	Filters map[string]any `json:"filters"`
-	Items   []Item      `json:"items"`
+	Items   []Item         `json:"items"`
 }
 
 // Item is the JSON-friendly representation of an Event.
@@ -140,7 +140,7 @@ type Stats struct {
 	Total         int64  `json:"total"`
 	Last24h       int64  `json:"last_24h"`
 	Failures24h   int64  `json:"failures_24h"`
-	Denied24h      int64  `json:"denied_24h"`
+	Denied24h     int64  `json:"denied_24h"`
 	RetentionDays int    `json:"retention_days"`
 	DropCount     int64  `json:"drop_count"`
 	DBPath        string `json:"db_path"`
@@ -344,7 +344,7 @@ func normalizeContainerID(id string) string {
 
 type noopRecorder struct{ cfg Config }
 
-func (n *noopRecorder) Record(context.Context, Event)              {}
+func (n *noopRecorder) Record(context.Context, Event) {}
 func (n *noopRecorder) List(_ context.Context, q Query) (Page, error) {
 	return Page{Items: []Item{}, Filters: filtersMap(q)}, nil
 }

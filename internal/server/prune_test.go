@@ -30,7 +30,7 @@ type fakePruneClient struct {
 
 	duCalls       int
 	imgRemoveCnt  int
-	volRemoveCnt int
+	volRemoveCnt  int
 	lastImgOpts   image.RemoveOptions
 	removedImages []string
 	removedVols   []string

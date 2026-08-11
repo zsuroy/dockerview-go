@@ -53,8 +53,8 @@ var (
 // the deletion phase runs on a detached context so a client disconnect cannot
 // interrupt already-started removals (which would make the audit inaccurate).
 const (
-	listTimeout   = 30 * time.Second
-	deleteTimeout = 2 * time.Minute
+	listTimeout          = 30 * time.Second
+	deleteTimeout        = 2 * time.Minute
 	danglingPruneTimeout = 30 * time.Second
 )
 
