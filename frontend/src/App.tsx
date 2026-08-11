@@ -11,6 +11,7 @@ import { ContainerCard } from './components/ContainerCard';
 import { AuthModal } from './components/AuthModal';
 import { LogsModal } from './components/LogsModal';
 import { ExecModal } from './components/ExecModal';
+import { PruneModal } from './components/PruneModal';
 
 interface VersionInfo {
   current_version: string;
@@ -41,6 +42,7 @@ export default function App() {
   });
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authError, setAuthError] = useState<boolean>(false);
+  const [showPruneModal, setShowPruneModal] = useState<boolean>(false);
 
   // Pending action stored as data (not a function closure) to avoid stale closure bugs.
   // The function-closure approach captured an old performOp/handleOpenLogs with an empty
@@ -49,7 +51,8 @@ export default function App() {
     | { kind: 'op'; containerId: string; op: 'start' | 'stop' | 'restart'; containerName: string }
     | { kind: 'logs'; containerId: string; containerName: string }
     | { kind: 'exec'; containerId: string; containerName: string }
-    | { kind: 'upgrade' };
+    | { kind: 'upgrade' }
+    | { kind: 'prune' };
   const [pendingAction, setPendingAction] = useState<PendingActionType | null>(null);
 
   // Modals & Toasts
@@ -262,6 +265,12 @@ export default function App() {
     setExecContainer({ id, name });
   };
 
+  // Open the cleanup (prune) modal. The list/dry-run are guest-readable; if the
+  // user later tries to delete without a token, PruneModal triggers auth.
+  const handleOpenPrune = useCallback(() => {
+    setShowPruneModal(true);
+  }, []);
+
   const handleVerifyToken = (token: string) => {
     setServerToken(token);
     localStorage.setItem('dockerview_token', token);
@@ -281,6 +290,8 @@ export default function App() {
         handleOpenExec(action.containerId, action.containerName, token);
       } else if (action.kind === 'upgrade') {
         handleUpgrade(token);
+      } else if (action.kind === 'prune') {
+        setShowPruneModal(true);
       }
     }
   };
@@ -303,6 +314,7 @@ export default function App() {
           setFilterKey={setFilterKey}
           theme={theme}
           onToggleTheme={toggleTheme}
+          onCleanup={handleOpenPrune}
         />
 
         {/* Aggregate Stats Dashboard */}
@@ -502,6 +514,25 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Disk Cleanup (prune) Modal — list → dry-run → confirm → result */}
+      <PruneModal
+        open={showPruneModal}
+        onOpenChange={setShowPruneModal}
+        serverToken={serverToken}
+        onToast={showToast}
+        onAuthRequired={() => {
+          // Close the prune modal before opening the auth modal to avoid two
+          // stacked dialogs fighting for focus; the pending action reopens it
+          // after a successful token verification.
+          setShowPruneModal(false);
+          localStorage.removeItem('dockerview_token');
+          setServerToken('');
+          setPendingAction({ kind: 'prune' });
+          setAuthError(true);
+          setShowAuthModal(true);
+        }}
+      />
 
       {/* Dynamic Toast Messages */}
       <div className="fixed bottom-[30px] right-[30px] flex flex-col gap-2.5 z-[2000]">

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -27,6 +28,8 @@ type Server struct {
 	currentData    []docker.ContainerInfo
 	dashboard      []byte
 	dockerClient   *client.Client
+	pruner         *docker.Pruner
+	audit          *auditLog
 	token          string
 	currentVersion string
 	commit         string
@@ -38,15 +41,30 @@ type Server struct {
 // NewServer creates a new Server instance.
 func NewServer(cli *client.Client, token string, currentVersion, commit, buildDate string) *Server {
 	data, _ := webContent.ReadFile("web/index.html")
+	var pruner *docker.Pruner
+	if cli != nil {
+		pruner = docker.NewPruner(cli)
+	}
 	return &Server{
 		clients:        make(map[chan []docker.ContainerInfo]bool),
 		dashboard:      data,
 		dockerClient:   cli,
+		pruner:         pruner,
+		audit:          newAuditLog(),
 		token:          token,
 		currentVersion: currentVersion,
 		commit:         commit,
 		buildDate:      buildDate,
 	}
+}
+
+// secureEqual compares two strings in constant time. It returns false early when
+// lengths differ (the length of the configured token is not secret).
+func secureEqual(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 // checkAuth checks if the request is authenticated.
@@ -57,19 +75,19 @@ func (s *Server) checkAuth(w http.ResponseWriter, r *http.Request) bool {
 
 	// 1. Check query param
 	token := r.URL.Query().Get("token")
-	if token == s.token {
+	if secureEqual(token, s.token) {
 		return true
 	}
 
 	// 2. Check header X-Auth-Token
-	if r.Header.Get("X-Auth-Token") == s.token {
+	if secureEqual(r.Header.Get("X-Auth-Token"), s.token) {
 		return true
 	}
 
 	// 3. Check Authorization Bearer header
 	authHeader := r.Header.Get("Authorization")
-	if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
-		if authHeader[7:] == s.token {
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		if secureEqual(strings.TrimPrefix(authHeader, "Bearer "), s.token) {
 			return true
 		}
 	}
@@ -101,8 +119,9 @@ func (s *Server) UpdateData(data []docker.ContainerInfo) {
 	}
 }
 
-// Start starts the HTTP server on the specified port.
-func (s *Server) Start(ctx context.Context, port int) error {
+// Handler returns the HTTP handler for the server, including CORS wrapping and
+// all registered routes. It is used by Start and is also useful for tests.
+func (s *Server) Handler() http.Handler {
 	webFS, _ := fs.Sub(webContent, "web")
 	fileServer := http.FileServer(http.FS(webFS))
 
@@ -115,6 +134,10 @@ func (s *Server) Start(ctx context.Context, port int) error {
 	mux.HandleFunc("/api/container/exec", s.handleContainerExec)
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/api/upgrade", s.handleUpgrade)
+	mux.HandleFunc("/api/prune/candidates", s.handlePruneCandidates)
+	mux.HandleFunc("/api/prune/dry-run", s.handlePruneDryRun)
+	mux.HandleFunc("/api/prune/confirm", s.handlePruneConfirm)
+	mux.HandleFunc("/api/prune/audit", s.handlePruneAudit)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Try to serve static file; if not found, fall back to index.html (SPA)
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -132,7 +155,7 @@ func (s *Server) Start(ctx context.Context, port int) error {
 		s.handleDashboard(w, r)
 	})
 
-	corsHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token, Authorization")
@@ -142,10 +165,13 @@ func (s *Server) Start(ctx context.Context, port int) error {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
 
+// Start starts the HTTP server on the specified port.
+func (s *Server) Start(ctx context.Context, port int) error {
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: corsHandler,
+		Handler: s.Handler(),
 	}
 
 	errChan := make(chan error, 1)

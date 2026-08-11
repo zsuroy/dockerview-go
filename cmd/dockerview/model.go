@@ -71,14 +71,14 @@ var (
 			Foreground(lipgloss.Color("#666666"))
 
 	styleID        = lipgloss.NewStyle().Foreground(lipgloss.Color("#00D9FF")).Width(14)
-	styleName      = lipgloss.NewStyle().Width(20)
+	styleName      = lipgloss.NewStyle().Width(22)
 	styleMemory    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00D9FF")).Width(10)
 	styleBlkio     = lipgloss.NewStyle().Foreground(lipgloss.Color("#00D9FF")).Width(18)
 	styleNetwork   = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Width(18)
 	styleCPUOk     = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Width(8)
 	styleCPUHot    = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Width(8)
-	styleStatusOk  = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Width(18)
-	styleStatusBad = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Width(18)
+	styleStatusOk  = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Width(24)
+	styleStatusBad = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Width(24)
 
 	styleError = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444"))
 	styleEmpty = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888"))
@@ -388,24 +388,24 @@ func (m *model) View() string {
 	header := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		styleHeader.Width(14).Render("ID"),
-		styleHeader.Width(20).Render("Name"),
+		styleHeader.Width(22).Render("Name"),
 		styleHeader.Width(8).Render("CPU"),
 		styleHeader.Width(10).Render("Memory"),
 		styleHeader.Width(18).Render("Storage"),
 		styleHeader.Width(18).Render("Network"),
-		styleHeader.Width(18).Render("Status"),
+		styleHeader.Width(24).Render("Status"),
 	)
 
 	var rows []string
 	for i, c := range containers {
 		name := c.Name
-		if len(name) > 20 {
-			name = name[:18] + ".."
+		if len(name) > 22 {
+			name = name[:20] + ".."
 		}
 
 		status := c.Status
-		if len(status) > 18 {
-			status = status[:16] + ".."
+		if len(status) > 24 {
+			status = status[:22] + ".."
 		}
 
 		cpuVal, _ := strconv.ParseFloat(strings.TrimSuffix(c.CPU, "%"), 64)
@@ -450,7 +450,7 @@ func (m *model) View() string {
 		title,
 		subtitle,
 		header,
-		strings.Repeat("─", 102),
+		strings.Repeat("─", 114),
 		strings.Join(rows, "\n"),
 	)
 
