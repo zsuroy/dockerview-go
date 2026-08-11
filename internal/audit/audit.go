@@ -181,7 +181,10 @@ func Open(cfg Config) (Recorder, error) {
 			return nil, fmt.Errorf("audit: mkdir db dir: %w", err)
 		}
 	}
-	r := &sqliteRecorder{cfg: cfg, dropCount: new(atomic.Int64)}
+	r := &sqliteRecorder{cfg: cfg, dropCount: new(atomic.Int64), retentionDays: cfg.RetentionDays}
+	if cfg.RetentionDays > 0 {
+		r.stopCh = make(chan struct{})
+	}
 	var err error
 	r.db, err = openSQLite(cfg.DBPath)
 	if err != nil {
@@ -200,7 +203,9 @@ func Open(cfg Config) (Recorder, error) {
 	if _, _, err := r.db.Exec(`PRAGMA busy_timeout=5000`); err != nil {
 		log.Printf("audit: set busy_timeout: %v", err)
 	}
-	go r.pruneLoop()
+	if cfg.RetentionDays > 0 {
+		go r.pruneLoop()
+	}
 	return r, nil
 }
 
@@ -362,11 +367,13 @@ func (n *noopRecorder) Close() error { return nil }
 // ---- sqlite recorder ----
 
 type sqliteRecorder struct {
-	cfg       Config
-	db        sqlexec
-	dropCount *atomic.Int64
-	stopOnce  sync.Once
-	stopCh    chan struct{}
+	cfg           Config
+	db            sqlexec
+	dropCount     *atomic.Int64
+	stopOnce      sync.Once
+	stopCh        chan struct{}
+	closed        atomic.Bool
+	retentionDays int
 }
 
 // small interface so tests can substitute a fake.
@@ -377,10 +384,10 @@ type sqlexec interface {
 }
 
 func (r *sqliteRecorder) pruneLoop() {
-	if r.cfg.RetentionDays <= 0 {
+	retentionDays := r.retentionDays
+	if retentionDays <= 0 {
 		return
 	}
-	r.stopCh = make(chan struct{})
 	t := time.NewTicker(time.Hour)
 	defer t.Stop()
 	for {
@@ -388,13 +395,16 @@ func (r *sqliteRecorder) pruneLoop() {
 		case <-r.stopCh:
 			return
 		case <-t.C:
-			r.prune()
+			if r.closed.Load() {
+				return
+			}
+			r.pruneWithDays(retentionDays)
 		}
 	}
 }
 
-func (r *sqliteRecorder) prune() {
-	cutoff := time.Now().UTC().AddDate(0, 0, -r.cfg.RetentionDays)
+func (r *sqliteRecorder) pruneWithDays(retentionDays int) {
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
 	_, _, err := r.db.Exec(`DELETE FROM audit_events WHERE time < ?`,
 		cutoff.Format(time.RFC3339Nano))
 	if err != nil {
@@ -403,7 +413,12 @@ func (r *sqliteRecorder) prune() {
 	}
 }
 
+func (r *sqliteRecorder) prune() {
+	r.pruneWithDays(r.cfg.RetentionDays)
+}
+
 func (r *sqliteRecorder) Close() error {
+	r.closed.Store(true)
 	if r.stopCh != nil {
 		r.stopOnce.Do(func() { close(r.stopCh) })
 	}
