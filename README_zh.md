@@ -40,6 +40,7 @@
 - **端口映射可视化**：直接在仪表盘卡片上展示容器的端口映射与暴露端口。暴露端口展示为静态标签，已绑定的端口映射则显示为交互式标牌（例如 `8080 → 80/tcp`），点击可直接在浏览器中打开容器对应的 Web 页面。
 - **磁盘清理（Prune）**：在 Web 仪表盘中清理未使用的镜像和悬空卷。支持预览候选项目（dry-run）、管理员确认删除，并查看详细的结果摘要和审计日志。访客可预览，删除需要管理员 Token。
 - **操作审计中心**：追踪「谁在何时对哪个容器做了什么」。关键写操作（start/stop/restart/exec）会持久化到审计日志，包含操作者身份、来源、时间、容器、结果、耗时和请求上下文。Web 仪表盘提供可搜索的审计视图，支持筛选、分页和 JSON/Markdown 导出。
+- **备份快照**：在宿主机重装或版本升级前，将当前容器现场打包为可携带的 zip 归档。支持预览打包计划（不写磁盘）、创建带交接备注的原子归档，并在「备份」标签页中浏览、下载、删除历史快照。默认仅导出运行中的容器，可勾选包含已停止容器。支持通过 `-no-docker` + JSON fixture 离线验证。
 - **状态颜色标识**：运行中为绿色，已停止/退出为红色
 - **CPU 告警**：CPU 使用率超过 50% 时红色高亮
 - **自动检测**：自动检测 Docker Socket（支持 Unix Socket、WSL、Colima、OrbStack、Podman、Rancher Desktop 等）
@@ -111,6 +112,23 @@ go run ./cmd/dockerview/
 ```
 
 启动后在浏览器中访问 `http://localhost:8080`（或自定义端口）即可打开交互式 Web 控制台。
+
+#### 备份快照
+
+在宿主机重装或迁机前，将当前容器现场打包为可携带的 zip 归档：
+
+```bash
+# 默认备份行为（仅运行中的容器）
+./build/dockerview -server
+
+# 在快照中包含已停止/退出的容器
+./build/dockerview -server -backup-dir /opt/backups -backup-max 20
+
+# 无 Docker 守护进程的离线验证（fixture 驱动）
+./build/dockerview -server -no-docker -fixture testdata/backup_fixture.json
+```
+
+归档结构：`manifest.json`、`containers.json`、`config/runtime.json`、`summaries/<id>-<name>.json`（脱敏 env）、`README.txt`，以及可选的 `images/*.tar`（开启 `include_images` 时）。敏感环境变量值会被掩码为 `***MASKED***`；不含 Token 和 volume 数据。
 
 #### 安全与访客模式
 
@@ -193,6 +211,8 @@ dockerview-go/
 │   ├── utils.go              # 工具函数
 │   └── version.go            # 版本信息
 ├── internal/
+│   ├── audit/               # 操作审计日志（SQLite 存储）
+│   ├── backup/              # 备份快照管理器与打包器
 │   ├── docker/               # Docker API 客户端与健康度评分
 │   ├── server/               # HTTP & SSE 服务器
 │   │   ├── server.go         # 服务器逻辑与 API 端点

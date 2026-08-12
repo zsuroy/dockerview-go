@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.21] - 2026-08-12
+
+### Added
+
+- **Backup Snapshots**: New on-call backup feature that captures the current container scene as a portable zip archive before upgrades or host rebuilds. Archives are stored in `data/backups/` with a strict whitelist naming scheme and count-based retention (default 10, configurable via `-backup-max`).
+  - New `internal/backup` package: snapshot manager (single-flight create, atomic temp-file + rename, retention pruning), zip packer (`manifest.json`, `containers.json`, `config/runtime.json`, `summaries/`, `README.txt`, optional `images/`), env redaction at pack time, and pluggable `Provider` interface (Docker daemon, JSON fixture, or empty).
+  - New `internal/docker/backup.go`: `DockerProvider` lists and inspects all containers, exports images via `docker save`; `NewClientMaybeSkipped` honors `-no-docker` for offline verification.
+  - New server endpoints: `/api/backup/preview` (read-only plan, zero disk), `/api/backup/create` (atomic archive, detached context), `/api/backup/list`, `/api/backup/download`, `/api/backup/delete`. All token-gated with audit events.
+  - New CLI flags: `-no-docker`, `-fixture`, `-backup-dir`, `-backup-max` for offline/stub mode and backup configuration.
+  - New audit action constants: `backup_preview`, `backup_create`, `backup_list`, `backup_download`, `backup_delete`.
+  - **Frontend Backup Panel**: New "BACKUPS" tab in the web dashboard with preview (container count, estimated size, file list), create form (operator note, include images, include stopped), and history table with download/delete actions. Full i18n (English & 简体中文).
+  - **Include Stopped Containers Option**: Backup defaults to running containers only; a new `include_stopped` toggle (CLI flag and web UI checkbox) optionally captures exited/created containers as well.
+- **Frontend Test Infrastructure**: Added `vitest` config, `@testing-library/react`, `@testing-library/jest-dom`, `happy-dom` environment, and `src/test/setup.ts` for jsdom polyfills. 54 backup-related unit tests covering API, logic, and component flows.
+
+
 ## [0.1.20] - 2026-08-11
 
 ### Added

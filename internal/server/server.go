@@ -15,6 +15,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/zsuroy/dockerview-go/internal/audit"
+	"github.com/zsuroy/dockerview-go/internal/backup"
 	"github.com/zsuroy/dockerview-go/internal/docker"
 	"github.com/zsuroy/dockerview-go/internal/version"
 )
@@ -38,6 +39,7 @@ type Server struct {
 	buildDate      string
 	upgradeMu      sync.Mutex
 	upgradeRunning bool
+	backupMgr      *backup.Manager
 }
 
 // NewServer creates a new Server instance.
@@ -134,6 +136,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/audit", s.handleAudit)
 	mux.HandleFunc("/api/audit/export", s.handleAuditExport)
 	mux.HandleFunc("/api/audit/stats", s.handleAuditStats)
+	mux.HandleFunc("/api/backup/preview", s.handleBackupPreview)
+	mux.HandleFunc("/api/backup/create", s.handleBackupCreate)
+	mux.HandleFunc("/api/backup/list", s.handleBackupList)
+	mux.HandleFunc("/api/backup/download", s.handleBackupDownload)
+	mux.HandleFunc("/api/backup/delete", s.handleBackupDelete)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Try to serve static file; if not found, fall back to index.html (SPA)
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -178,9 +185,19 @@ func (s *Server) Start(ctx context.Context, port int) error {
 
 	select {
 	case <-ctx.Done():
+		// Interrupt an in-flight backup create so Shutdown does not block on
+		// the (detached) create context for its full timeout.
+		s.AbortBackups()
 		return server.Shutdown(context.Background())
 	case err := <-errChan:
 		return err
+	}
+}
+
+// AbortBackups cancels any in-flight backup create (graceful shutdown hook).
+func (s *Server) AbortBackups() {
+	if m := s.backupManager(); m != nil {
+		m.Abort()
 	}
 }
 

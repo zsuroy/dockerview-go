@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid } from 'lucide-react';
+import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid, Archive } from 'lucide-react';
 import type { ToastMessage } from './types';
 import { formatBytes, basePath } from './utils';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -13,6 +13,7 @@ import { LogsModal } from './components/LogsModal';
 import { ExecModal } from './components/ExecModal';
 import { PruneModal } from './components/PruneModal';
 import { AuditPanel } from './components/AuditPanel';
+import { BackupPanel } from './components/BackupPanel';
 
 interface VersionInfo {
   current_version: string;
@@ -54,11 +55,12 @@ export default function App() {
     | { kind: 'exec'; containerId: string; containerName: string }
     | { kind: 'upgrade' }
     | { kind: 'prune' }
-    | { kind: 'audit' };
+    | { kind: 'audit' }
+    | { kind: 'backups' };
   const [pendingAction, setPendingAction] = useState<PendingActionType | null>(null);
 
-  // Active top-level view: containers or audit
-  const [view, setView] = useState<'containers' | 'audit'>('containers');
+  // Active top-level view: containers, audit, or backups
+  const [view, setView] = useState<'containers' | 'audit' | 'backups'>('containers');
 
   // Modals & Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -299,6 +301,8 @@ export default function App() {
         setShowPruneModal(true);
       } else if (action.kind === 'audit') {
         setView('audit');
+      } else if (action.kind === 'backups') {
+        setView('backups');
       }
     }
   };
@@ -313,6 +317,29 @@ export default function App() {
     }
     setView('audit');
   }, [serverToken]);
+
+  // When opening backups without a token, prompt for auth. The backup panel
+  // is token-gated end-to-end (list/download all require a valid token).
+  const handleBackupsNav = useCallback(() => {
+    if (!serverToken) {
+      setPendingAction({ kind: 'backups' });
+      setAuthError(false);
+      setShowAuthModal(true);
+      return;
+    }
+    setView('backups');
+  }, [serverToken]);
+
+  // Memoized: BackupPanel effects depend on this callback, and App re-renders
+  // on every SSE tick — an inline arrow would retrigger the panel's list
+  // fetch once per second (flicker + request/audit flood).
+  const handleBackupAuthRequired = useCallback(() => {
+    localStorage.removeItem('dockerview_token');
+    setServerToken('');
+    setPendingAction({ kind: 'backups' });
+    setAuthError(true);
+    setShowAuthModal(true);
+  }, []);
 
   return (
     <div className="relative min-h-screen">
@@ -350,6 +377,13 @@ export default function App() {
           >
             <ClipboardList className="w-3.5 h-3.5" />{t('app.navAudit')}
           </button>
+          <button
+            onClick={handleBackupsNav}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[12px] tracking-wider uppercase border transition-all ${view === 'backups' ? 'bg-accent-cyan/15 border-accent-cyan/50 text-accent-cyan' : 'bg-surface-1 border-border-light text-text-dim hover:text-text'}`}
+            data-testid="nav-backups"
+          >
+            <Archive className="w-3.5 h-3.5" />{t('app.navBackups')}
+          </button>
         </div>
 
         {view === 'audit' ? (
@@ -362,6 +396,12 @@ export default function App() {
               setAuthError(true);
               setShowAuthModal(true);
             }}
+          />
+         ) : view === 'backups' ? (
+          <BackupPanel
+            token={serverToken}
+            onAuthRequired={handleBackupAuthRequired}
+            onToast={showToast}
           />
          ) : (
            <>
