@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/zsuroy/dockerview-go/internal/audit"
+	"github.com/zsuroy/dockerview-go/internal/backup"
 	"github.com/zsuroy/dockerview-go/internal/docker"
 	"github.com/zsuroy/dockerview-go/internal/server"
 
@@ -30,6 +31,10 @@ func main() {
 	auditDB := flag.String("audit-db", envOr("DOCKERVIEW_AUDIT_DB", "data/dockerview.db"), "Path to audit SQLite DB; use :memory: for tests, or empty to disable")
 	auditRetention := flag.Int("audit-retention-days", envIntOr("DOCKERVIEW_AUDIT_RETENTION_DAYS", 90), "Audit retention in days (0 disables pruning)")
 	auditDisable := flag.Bool("audit-disable", envBool("DOCKERVIEW_AUDIT_DISABLE"), "Disable audit logging entirely")
+	noDocker := flag.Bool("no-docker", envBool("DOCKERVIEW_NO_DOCKER"), "Skip Docker client connection (test/stub mode)")
+	fixturePath := flag.String("fixture", envOr("DOCKERVIEW_FIXTURE", ""), "JSON fixture with container/image metadata for -no-docker backup verification")
+	backupDir := flag.String("backup-dir", envOr("DOCKERVIEW_BACKUP_DIR", backup.DefaultDir), "Directory where backup snapshot archives are stored")
+	backupMax := flag.Int("backup-max", envIntOr("DOCKERVIEW_BACKUP_MAX", backup.DefaultMaxArchives), "Maximum number of backup archives to retain (oldest pruned after create)")
 	flag.Parse()
 
 	SetColor()
@@ -51,12 +56,16 @@ func main() {
 		os.Exit(0)
 	}
 
-	client, err := docker.NewClient()
+	client, err := docker.NewClientMaybeSkipped(*noDocker)
 	if err != nil {
 		fmt.Printf("Failed to connect to Docker: %v\n", err)
 		os.Exit(1)
 	}
-	defer client.Close()
+	if client != nil {
+		defer client.Close()
+	} else {
+		fmt.Printf("[INFO] Running without Docker client (-no-docker); container endpoints are unavailable, backup runs in fixture/stub mode\n")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -108,6 +117,43 @@ func main() {
 			}
 		}()
 
+		// Backup snapshot manager: docker-backed in production, fixture/mock
+		// under -no-docker so acceptance can run offline (BACKUP_DESIGN §7).
+		var provider backup.Provider
+		switch {
+		case client != nil:
+			provider = docker.NewBackupProvider(client)
+		case *fixturePath != "":
+			fxp, fxErr := backup.NewFixtureProvider(*fixturePath)
+			if fxErr != nil {
+				log.Printf("[ERROR] %v", fxErr)
+				os.Exit(1)
+			}
+			provider = fxp
+		default:
+			provider = backup.EmptyProvider{}
+		}
+		bmgr, bmErr := backup.NewManager(backup.Config{
+			Dir:         *backupDir,
+			MaxArchives: *backupMax,
+			Provider:    provider,
+			Runtime: backup.RuntimeConfig{
+				ServerPort:         *serverPort,
+				TokenMode:          token != "",
+				AuditEnabled:       !*auditDisable && *auditDB != "",
+				AuditRetentionDays: *auditRetention,
+				Version:            Version,
+				Commit:             Commit,
+				BuildDate:          Date,
+			},
+		})
+		if bmErr != nil {
+			log.Printf("[WARN] Backup snapshots unavailable: %v", bmErr)
+		} else {
+			srv.SetBackupManager(bmgr)
+			log.Printf("[INFO] Backup snapshots: dir=%s max=%d include_images_default=false", *backupDir, *backupMax)
+		}
+
 		go func() {
 			if err := srv.Start(ctx, *serverPort); err != nil {
 				fmt.Fprintf(os.Stderr, "HTTP server error: %v\n", err)
@@ -132,6 +178,9 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if client == nil {
+					continue // -no-docker: nothing to poll; backup stays available
+				}
 				containers, err := docker.GetContainerStats(ctx, client)
 				if err == nil && srv != nil {
 					srv.UpdateData(containers)
@@ -150,6 +199,9 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if client == nil {
+					continue // -no-docker stub mode
+				}
 				containers, err := docker.GetContainerStats(ctx, client)
 				m.mu.Lock()
 				m.containers = containers
@@ -200,6 +252,12 @@ func printHelp() {
 	fmt.Println("        Disable audit storage; /api/audit endpoints return empty")
 	fmt.Println("  -no-docker")
 	fmt.Println("        Skip Docker client connection (test/stub mode)")
+	fmt.Println("  -fixture path")
+	fmt.Println("        JSON fixture with container/image metadata for -no-docker backup verification")
+	fmt.Println("  -backup-dir path")
+	fmt.Println("        Directory for backup snapshot archives (default data/backups)")
+	fmt.Println("  -backup-max int")
+	fmt.Println("        Maximum number of backup archives to retain (default 10)")
 	fmt.Println("  -help")
 	fmt.Println("        Show this help message")
 	fmt.Println("  -version")

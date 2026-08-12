@@ -40,6 +40,7 @@ English | [中文](README_zh.md)
 - **Port Mappings Visualizer**: Displays all container port mappings and exposed ports directly on the dashboard cards. Exposed ports render as clean tags, and mapped port mappings appear as interactive badges (e.g. `8080 → 80/tcp`) linking directly to the running container web interface.
 - **Disk Cleanup (Prune)**: Clean up unused images and dangling volumes from the web dashboard. Preview candidates with a dry-run, confirm deletion with an explicit acknowledgement, and view a detailed result summary with audit log. Guests can preview; admin token is required to delete.
 - **Operation Audit Center**: Track who did what, when, to which container. Key write operations (start, stop, restart, exec) are persisted to an audit log with actor identity, source, timestamp, container, result, duration, and request context. The web dashboard provides a searchable audit view with filters, pagination, and JSON/Markdown export.
+- **Backup Snapshots**: Capture the current container scene as a portable zip archive before upgrades or host rebuilds. Preview the packing plan (zero disk writes), create an atomic archive with an operator note, and browse/download/delete past snapshots from the "BACKUPS" tab. Defaults to running containers only; optionally include stopped containers. Supports offline verification via `-no-docker` + JSON fixtures.
 - **Color-coded Status**: Green for running, red for stopped/exited containers.
 - **CPU Alerts**: High CPU usage (>50%) highlighted in red.
 - **Auto-detection**: Automatically detects Docker socket (including Unix sockets, WSL, Colima, OrbStack, Podman, Rancher Desktop, etc.).
@@ -111,6 +112,23 @@ You can run `dockerview` with an HTTP server enabled to view a real-time web das
 ```
 
 Once started, navigate to `http://localhost:8080` (or your custom port) in your web browser to access the interactive web console.
+
+#### Backup Snapshots
+
+Capture the current container scene as a portable zip archive before host rebuilds or migrations:
+
+```bash
+# Default backup behavior (running containers only)
+./build/dockerview -server
+
+# Include stopped/exited containers in snapshots
+./build/dockerview -server -backup-dir /opt/backups -backup-max 20
+
+# Offline verification without a Docker daemon (fixture-driven)
+./build/dockerview -server -no-docker -fixture testdata/backup_fixture.json
+```
+
+Archive layout: `manifest.json`, `containers.json`, `config/runtime.json`, `summaries/<id>-<name>.json` (redacted env), `README.txt`, and optional `images/*.tar` (when `include_images` is enabled). Sensitive env values are masked as `***MASKED***`; tokens and volumes are never included.
 
 #### Security & Guest View Mode
 
@@ -193,6 +211,8 @@ dockerview-go/
 │   ├── utils.go              # Utilities
 │   └── version.go            # Version info
 ├── internal/
+│   ├── audit/               # Operation audit log (SQLite-backed)
+│   ├── backup/              # Backup snapshot manager & packer
 │   ├── docker/               # Docker API client & health scoring
 │   ├── server/               # HTTP & SSE server
 │   │   ├── server.go         # Server logic & API endpoints

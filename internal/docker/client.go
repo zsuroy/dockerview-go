@@ -79,7 +79,6 @@ func NewClient() (*client.Client, error) {
 			return cli, nil
 		}
 	}
-
 	if runtime.GOOS == "windows" {
 		hosts := []string{
 			"//./pipe/docker_engine",
@@ -111,6 +110,16 @@ func NewClient() (*client.Client, error) {
 	}
 
 	return nil, fmt.Errorf("no docker daemon found")
+}
+
+// NewClientMaybeSkipped honors the -no-docker flag: when skip is true it
+// returns (nil, nil) instead of probing for a daemon. This enables offline
+// verification of features (like backup) that accept fixture data.
+func NewClientMaybeSkipped(skip bool) (*client.Client, error) {
+	if skip {
+		return nil, nil
+	}
+	return NewClient()
 }
 
 func detectUnixSockets() []string {

@@ -38,6 +38,12 @@ const (
 	ActionOp      = "op"      // coarse action for auth failures where op is unknown
 	ActionAudit   = "audit"   // reads/exports of the audit endpoint itself
 	ActionLogs    = "logs"    // reserved for future log-fetch auditing
+
+	ActionBackupPreview  = "backup_preview"
+	ActionBackupCreate   = "backup_create"
+	ActionBackupList     = "backup_list"
+	ActionBackupDownload = "backup_download"
+	ActionBackupDelete   = "backup_delete"
 )
 
 // Result values.
