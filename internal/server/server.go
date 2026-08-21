@@ -17,6 +17,7 @@ import (
 	"github.com/zsuroy/dockerview-go/internal/audit"
 	"github.com/zsuroy/dockerview-go/internal/backup"
 	"github.com/zsuroy/dockerview-go/internal/docker"
+	"github.com/zsuroy/dockerview-go/internal/files"
 	"github.com/zsuroy/dockerview-go/internal/version"
 )
 
@@ -40,6 +41,10 @@ type Server struct {
 	upgradeMu      sync.Mutex
 	upgradeRunning bool
 	backupMgr      *backup.Manager
+	files          filesSettings
+	copier         files.Copier
+	filesOpMu      sync.Mutex
+	filesInflight  map[string]bool
 }
 
 // NewServer creates a new Server instance.
@@ -141,6 +146,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/backup/list", s.handleBackupList)
 	mux.HandleFunc("/api/backup/download", s.handleBackupDownload)
 	mux.HandleFunc("/api/backup/delete", s.handleBackupDelete)
+	mux.HandleFunc("/api/files/in/preview", s.handleFilesInPreview)
+	mux.HandleFunc("/api/files/in", s.handleFilesIn)
+	mux.HandleFunc("/api/files/out/preview", s.handleFilesOutPreview)
+	mux.HandleFunc("/api/files/out", s.handleFilesOut)
+	mux.HandleFunc("/api/files/list", s.handleFilesList)
+	mux.HandleFunc("/api/files/archive/preview", s.handleFilesArchivePreview)
+	mux.HandleFunc("/api/files/archive", s.handleFilesArchive)
+	mux.HandleFunc("/api/files/config", s.handleFilesConfig)
+	mux.HandleFunc("/api/files/", s.handleFilesNotFound)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Try to serve static file; if not found, fall back to index.html (SPA)
 		path := strings.TrimPrefix(r.URL.Path, "/")
@@ -162,7 +176,7 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Auth-Token, Authorization, X-Request-Id")
-		w.Header().Set("Access-Control-Expose-Headers", "X-Request-Id, Content-Disposition")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Request-Id, Content-Disposition, X-Dockerview-Sha256")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

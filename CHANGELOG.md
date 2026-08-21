@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.22] - 2026-08-22
+
+### Added
+
+- **Container File Transfer**: New "FILES" tab in the web dashboard for browsing, uploading, downloading, and archiving files inside containers, confined to a configurable jail root (default `/tmp/dockerview-files`). Directory tree browser with per-entry download and folder-as-tar archive download; upload with preview/confirm two-step flow, explicit overwrite acknowledgement, and explicit missing-directory creation consent. New packages: `internal/filejail` (path confinement & traversal defense), `internal/files` (tar-based copy engine over the Docker API with mock provider for tests). Eight new token-gated API endpoints: `/api/files/in/preview`, `/api/files/in`, `/api/files/out/preview`, `/api/files/out`, `/api/files/list`, `/api/files/archive/preview`, `/api/files/archive`, `/api/files/config`. Per-transfer size caps (default 8 MiB), audit events for every transfer operation, staging area with inflight locking on both host and container side, and guest downloads disabled by default (`files.allow_guest_download`).
+- **Configuration Standardization**: All settings now resolve through one layered precedence chain — CLI flag > `DOCKERVIEW_*` environment variable > `config.yaml` > built-in default — implemented in the new `internal/config` package with YAML validation against a strict allowlist and source tracking per setting. First launch writes a fully commented `config.yaml` sample into ConfigRoot (never overwritten); `-config-init` regenerates it. Secrets stay out of YAML: tokens come from `-token`, `DOCKERVIEW_TOKEN`, or a `token_file`. Data layout consolidated under ConfigRoot (`data/db/audit.db`, `data/backups/`, `data/files/`), with legacy flat-flag layouts migrated automatically on startup. New env vars: `DOCKERVIEW_CONFIG_DIR`, `DOCKERVIEW_DATA_DIR`, `DOCKERVIEW_TOKEN`, `DOCKERVIEW_PORT`, `DOCKERVIEW_SERVER`, `DOCKERVIEW_AUDIT_DB`, `DOCKERVIEW_AUDIT_RETENTION_DAYS`.
+- **TUI Adaptive Table Widths**: Terminal table columns now derive from live resize events instead of fixed widths, so narrow terminals no longer truncate names/status.
+- **Frontend Test Infrastructure**: Component coverage extended to the files panel (browse navigation, upload gates, path autofill, stale-listing regression) with gated XHR stubbing; suite now runs 68 tests.
+
+
 ## [0.1.21] - 2026-08-12
 
 ### Added

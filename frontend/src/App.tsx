@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid, Archive } from 'lucide-react';
+import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid, Archive, FolderOpen } from 'lucide-react';
 import type { ToastMessage } from './types';
 import { formatBytes, basePath } from './utils';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -14,6 +14,7 @@ import { ExecModal } from './components/ExecModal';
 import { PruneModal } from './components/PruneModal';
 import { AuditPanel } from './components/AuditPanel';
 import { BackupPanel } from './components/BackupPanel';
+import { FilesPanel } from './components/FilesPanel';
 
 interface VersionInfo {
   current_version: string;
@@ -56,11 +57,13 @@ export default function App() {
     | { kind: 'upgrade' }
     | { kind: 'prune' }
     | { kind: 'audit' }
-    | { kind: 'backups' };
+    | { kind: 'backups' }
+    | { kind: 'files'; containerId?: string };
   const [pendingAction, setPendingAction] = useState<PendingActionType | null>(null);
 
-  // Active top-level view: containers, audit, or backups
-  const [view, setView] = useState<'containers' | 'audit' | 'backups'>('containers');
+  // Active top-level view: containers, audit, backups or files
+  const [view, setView] = useState<'containers' | 'audit' | 'backups' | 'files'>('containers');
+  const [filesContainerId, setFilesContainerId] = useState<string | undefined>(undefined);
 
   // Modals & Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -303,6 +306,9 @@ export default function App() {
         setView('audit');
       } else if (action.kind === 'backups') {
         setView('backups');
+      } else if (action.kind === 'files') {
+        setFilesContainerId(action.containerId);
+        setView('files');
       }
     }
   };
@@ -337,6 +343,27 @@ export default function App() {
     localStorage.removeItem('dockerview_token');
     setServerToken('');
     setPendingAction({ kind: 'backups' });
+    setAuthError(true);
+    setShowAuthModal(true);
+  }, []);
+
+  // Files view is token-gated like backups. Opening from a container card
+  // preselects that container.
+  const handleFilesNav = useCallback((containerId?: string) => {
+    if (!serverToken) {
+      setPendingAction({ kind: 'files', containerId });
+      setAuthError(false);
+      setShowAuthModal(true);
+      return;
+    }
+    setFilesContainerId(containerId);
+    setView('files');
+  }, [serverToken]);
+
+  const handleFilesAuthRequired = useCallback(() => {
+    localStorage.removeItem('dockerview_token');
+    setServerToken('');
+    setPendingAction({ kind: 'files' });
     setAuthError(true);
     setShowAuthModal(true);
   }, []);
@@ -384,6 +411,13 @@ export default function App() {
           >
             <Archive className="w-3.5 h-3.5" />{t('app.navBackups')}
           </button>
+          <button
+            onClick={() => handleFilesNav(undefined)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[12px] tracking-wider uppercase border transition-all ${view === 'files' ? 'bg-accent-cyan/15 border-accent-cyan/50 text-accent-cyan' : 'bg-surface-1 border-border-light text-text-dim hover:text-text'}`}
+            data-testid="nav-files"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />{t('files.nav')}
+          </button>
         </div>
 
         {view === 'audit' ? (
@@ -401,6 +435,14 @@ export default function App() {
           <BackupPanel
             token={serverToken}
             onAuthRequired={handleBackupAuthRequired}
+            onToast={showToast}
+          />
+         ) : view === 'files' ? (
+          <FilesPanel
+            token={serverToken}
+            containers={containers}
+            initialContainerId={filesContainerId}
+            onAuthRequired={handleFilesAuthRequired}
             onToast={showToast}
           />
          ) : (
@@ -434,6 +476,7 @@ export default function App() {
                       onOp={performOp}
                       onLogs={handleOpenLogs}
                       onExec={handleOpenExec}
+                      onFiles={(id) => handleFilesNav(id)}
                       searchQuery={searchQuery}
                     />
                   ))}
@@ -459,6 +502,7 @@ export default function App() {
                         onOp={performOp}
                         onLogs={handleOpenLogs}
                         onExec={handleOpenExec}
+                        onFiles={(id) => handleFilesNav(id)}
                         searchQuery={searchQuery}
                       />
                     ))}

@@ -32,6 +32,8 @@ type model struct {
 	statusMsg    string
 	statusTimer  *time.Timer
 	dockerClient *dockerclient.Client
+
+	termWidth int
 }
 
 type tickMsg struct {
@@ -113,6 +115,10 @@ func (m *model) Init() tea.Cmd {
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.termWidth = msg.Width
+		return m, nil
+
 	case tickMsg:
 		return m, tea.Tick(time.Second, func(t time.Time) tea.Msg {
 			return tickMsg{t}
@@ -385,28 +391,13 @@ func (m *model) View() string {
 	title := styleTitle.Render("DockerView Monitor " + Version)
 	subtitle := styleSubtitle.Render("Press Ctrl+C to exit | ↑↓ Select | Enter Actions")
 
-	header := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		styleHeader.Width(14).Render("ID"),
-		styleHeader.Width(22).Render("Name"),
-		styleHeader.Width(8).Render("CPU"),
-		styleHeader.Width(10).Render("Memory"),
-		styleHeader.Width(18).Render("Storage"),
-		styleHeader.Width(18).Render("Network"),
-		styleHeader.Width(24).Render("Status"),
-	)
+	// Column plan adapts to the live terminal width: narrow terminals drop
+	// the Storage column first, then Network, so the table never overflows.
+	cols := tableColumns(m.contentWidth())
+	header := lipgloss.JoinHorizontal(lipgloss.Top, cols.header()...)
 
 	var rows []string
 	for i, c := range containers {
-		name := c.Name
-		if len(name) > 22 {
-			name = name[:20] + ".."
-		}
-
-		status := c.Status
-		if len(status) > 24 {
-			status = status[:22] + ".."
-		}
 
 		cpuVal, _ := strconv.ParseFloat(strings.TrimSuffix(c.CPU, "%"), 64)
 
@@ -420,16 +411,7 @@ func (m *model) View() string {
 			statusStyle = styleStatusBad
 		}
 
-		row := lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			styleID.Render(c.ID),
-			styleName.Render(name),
-			cpuStyle.Render(c.CPU),
-			styleMemory.Render(c.Memory),
-			styleBlkio.Render(c.Blkio),
-			styleNetwork.Render(c.Network),
-			statusStyle.Render(status),
-		)
+		row := lipgloss.JoinHorizontal(lipgloss.Top, cols.row(c, cpuStyle, statusStyle)...)
 
 		if i == m.cursor {
 			row = styleCursor.Render(row)
@@ -450,7 +432,7 @@ func (m *model) View() string {
 		title,
 		subtitle,
 		header,
-		strings.Repeat("─", 114),
+		strings.Repeat("─", cols.total()),
 		strings.Join(rows, "\n"),
 	)
 

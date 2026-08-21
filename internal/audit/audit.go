@@ -44,6 +44,10 @@ const (
 	ActionBackupList     = "backup_list"
 	ActionBackupDownload = "backup_download"
 	ActionBackupDelete   = "backup_delete"
+	ActionFileIn         = "file_in"
+	ActionFileOut        = "file_out"
+	ActionFileList       = "file_list"
+	ActionFileArchive    = "file_archive"
 )
 
 // Result values.

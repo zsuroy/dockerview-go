@@ -41,6 +41,8 @@
 - **磁盘清理（Prune）**：在 Web 仪表盘中清理未使用的镜像和悬空卷。支持预览候选项目（dry-run）、管理员确认删除，并查看详细的结果摘要和审计日志。访客可预览，删除需要管理员 Token。
 - **操作审计中心**：追踪「谁在何时对哪个容器做了什么」。关键写操作（start/stop/restart/exec）会持久化到审计日志，包含操作者身份、来源、时间、容器、结果、耗时和请求上下文。Web 仪表盘提供可搜索的审计视图，支持筛选、分页和 JSON/Markdown 导出。
 - **备份快照**：在宿主机重装或版本升级前，将当前容器现场打包为可携带的 zip 归档。支持预览打包计划（不写磁盘）、创建带交接备注的原子归档，并在「备份」标签页中浏览、下载、删除历史快照。默认仅导出运行中的容器，可勾选包含已停止容器。支持通过 `-no-docker` + JSON fixture 离线验证。
+- **容器文件传输**：在 Web 仪表盘的「文件」标签页中浏览、上传、下载容器内文件并打包归档。访问被限制在白名单根目录内（默认 `/tmp/dockerview-files`，可通过 `config.yaml` 配置）。上传采用「预览 → 确认」两步流程，覆盖已有文件与创建缺失目录均需显式确认；文件夹可打包为 tar 下载；所有操作均记录审计日志。
+- **配置文件与分层优先级**：所有配置按统一链路解析：命令行参数 > `DOCKERVIEW_*` 环境变量 > `config.yaml` > 内置默认值。首次启动自动生成带注释的 `config.yaml` 示例（也可用 `-config-init` 手动生成，绝不覆盖现有文件）；Token 永不写入 YAML（通过 `-token`、`DOCKERVIEW_TOKEN` 或 `token_file` 提供）。
 - **状态颜色标识**：运行中为绿色，已停止/退出为红色
 - **CPU 告警**：CPU 使用率超过 50% 时红色高亮
 - **自动检测**：自动检测 Docker Socket（支持 Unix Socket、WSL、Colima、OrbStack、Podman、Rancher Desktop 等）
@@ -130,6 +132,36 @@ go run ./cmd/dockerview/
 
 归档结构：`manifest.json`、`containers.json`、`config/runtime.json`、`summaries/<id>-<name>.json`（脱敏 env）、`README.txt`，以及可选的 `images/*.tar`（开启 `include_images` 时）。敏感环境变量值会被掩码为 `***MASKED***`；不含 Token 和 volume 数据。
 
+#### 容器文件传输
+
+「文件」标签页允许管理员在容器内浏览和传输文件。访问范围被限制在白名单根目录内（默认为容器内的 `/tmp/dockerview-files`）：
+
+```yaml
+# config.yaml
+files:
+  jail_root: /tmp/dockerview-files   # 容器内白名单根目录（绝对路径）
+  max_file_bytes: 8388608            # 单次传输上限，8 MiB
+  max_archive_bytes: 8388608
+  allow_guest_download: false        # 访客（无 Token）默认不可下载
+```
+
+- **浏览 / 下载**：列出白名单内任意目录，下载单个文件，或将整个文件夹打包为 tar 归档下载。
+- **上传**：选择文件后先预览目标（是否已有同名文件？目录是否缺失？），再确认写入。覆盖已有文件需显式勾选确认；创建缺失目录（包括白名单根目录本身）同样需要显式确认。
+- 所有操作均记录到审计日志。
+
+#### 配置文件
+
+所有配置集中在一处：ConfigRoot（默认 `~/.config/dockerview`，可用 `DOCKERVIEW_CONFIG_DIR` 覆盖）。每项配置的优先级：命令行参数 > `DOCKERVIEW_*` 环境变量 > `config.yaml` > 内置默认值。
+
+```bash
+# 在 ConfigRoot 中生成带注释的配置示例并退出（绝不覆盖已有文件）
+./build/dockerview -config-init
+
+# 照旧通过环境变量或参数覆盖任意配置
+DOCKERVIEW_PORT=9090 ./build/dockerview -server
+./build/dockerview -server -port 9090
+```
+
 #### 安全与访客模式
 
 - **访客视图（只读）**：任何人无需 Token 即可查看实时监控数据（CPU/内存、网络、磁盘 I/O）
@@ -213,6 +245,9 @@ dockerview-go/
 ├── internal/
 │   ├── audit/               # 操作审计日志（SQLite 存储）
 │   ├── backup/              # 备份快照管理器与打包器
+│   ├── config/              # 分层配置解析（CLI > env > yaml > 默认值）
+│   ├── filejail/            # 文件传输路径约束与穿越防御
+│   ├── files/               # 基于 tar 的容器文件复制引擎（进/出/列表/归档）
 │   ├── docker/               # Docker API 客户端与健康度评分
 │   ├── server/               # HTTP & SSE 服务器
 │   │   ├── server.go         # 服务器逻辑与 API 端点

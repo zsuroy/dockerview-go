@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ArrowDownUp, HardDrive, Play, Square, RefreshCw, Terminal, HeartPulse, Command } from 'lucide-react';
+import { ArrowDownUp, HardDrive, Play, Square, RefreshCw, Terminal, HeartPulse, Command, FolderOpen } from 'lucide-react';
 import type { Container } from '../types';
 import { getMemoryPercent } from '../utils';
 import { Sparkline, HighlightedText } from './Sparkline';
@@ -9,12 +9,13 @@ interface ContainerCardProps {
   container: Container;
   history?: { cpu: number[]; ram: number[] };
   onOp: (id: string, op: 'start' | 'stop' | 'restart', name: string) => Promise<void>;
-  onLogs: (id: string, name: string) => void;
-  onExec: (id: string, name: string) => void;
+  onLogs: (id: string, name: string, token?: string) => void;
+  onExec: (id: string, name: string, token?: string) => void;
+  onFiles?: (id: string) => void;
   searchQuery: string;
 }
 
-export function ContainerCard({ container, history, onOp, onLogs, onExec, searchQuery }: ContainerCardProps) {
+export function ContainerCard({ container, history, onOp, onLogs, onExec, onFiles, searchQuery }: ContainerCardProps) {
   const { t } = useTranslation();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -239,7 +240,7 @@ export function ContainerCard({ container, history, onOp, onLogs, onExec, search
           ) : (
             <button
               onClick={() => onOp(container.fullid, 'start', container.name)}
-              className="action-btn btn-start mr-auto"
+              className="action-btn btn-start"
             >
               <Play className="w-3 h-3" />
               {t('container.btnStart')}
@@ -247,16 +248,26 @@ export function ContainerCard({ container, history, onOp, onLogs, onExec, search
           )}
           {isUp && (
             <button
-              onClick={() => onExec(container.fullid, container.name)}
+              onClick={() => onExec(container.fullid, container.name, undefined)}
               className="action-btn btn-exec"
             >
               <Command className="w-3 h-3" />
               {t('container.btnExec')}
             </button>
           )}
+          {onFiles && (
+            <button
+              onClick={() => onFiles(container.fullid)}
+              className="action-btn btn-files"
+              title={t('files.title')}
+            >
+              <FolderOpen className="w-3 h-3" />
+              {t('files.nav')}
+            </button>
+          )}
           <button
-            onClick={() => onLogs(container.fullid, container.name)}
-            className="action-btn btn-logs ml-auto"
+            onClick={() => onLogs(container.fullid, container.name, undefined)}
+            className="action-btn btn-logs"
           >
             <Terminal className="w-3 h-3" />
             {t('container.btnLogs')}
