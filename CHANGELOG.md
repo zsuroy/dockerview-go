@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **TUI Adaptive Table Widths**: Terminal table columns now derive from live resize events instead of fixed widths, so narrow terminals no longer truncate names/status.
 - **Frontend Test Infrastructure**: Component coverage extended to the files panel (browse navigation, upload gates, path autofill, stale-listing regression) with gated XHR stubbing; suite now runs 68 tests.
 
+### Fixed
+
+- **Audit Payload Readability In Light Theme**: The audit detail payload block referenced an undefined `--code-bg` variable and always fell back to a near-black background, leaving dark text unreadable in light theme. Introduced theme-aware `--theme-code-bg` variables for light/dark and pointed the payload block at them.
 
 ## [0.1.21] - 2026-08-12
 

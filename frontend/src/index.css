@@ -60,6 +60,9 @@
   --theme-log-bg: rgba(0, 0, 0, 0.03);
   --theme-log-text: rgba(26, 27, 38, 0.85);
 
+  /* Inline code / payload blocks */
+  --theme-code-bg: rgba(0, 0, 0, 0.04);
+
   /* Card shadow */
   --theme-card-shadow: rgba(0, 0, 0, 0.08);
 
@@ -108,6 +111,9 @@
 
   --theme-log-bg: rgba(0, 0, 0, 0.2);
   --theme-log-text: rgba(255, 255, 255, 0.85);
+
+  /* Inline code / payload blocks */
+  --theme-code-bg: rgba(0, 0, 0, 0.35);
 
   --theme-card-shadow: rgba(0, 0, 0, 0.3);
 
