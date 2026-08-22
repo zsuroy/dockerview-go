@@ -1,9 +1,11 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestIsBackspaceKey(t *testing.T) {
@@ -27,5 +29,36 @@ func TestIsBackspaceKey(t *testing.T) {
 				t.Fatalf("isBackspaceKey() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestTruncateANSI(t *testing.T) {
+	if got := truncateANSI("hello", 10); got != "hello" {
+		t.Fatalf("short string mutated: %q", got)
+	}
+	if got := truncateANSI("hello world", 8); ansi.StringWidth(got) > 8 || !strings.HasSuffix(got, "…") {
+		t.Fatalf("want ellipsized <=8 cells, got %q (%d cells)", got, ansi.StringWidth(got))
+	}
+	if got := truncateANSI("\x1b[31mred text\x1b[0m", 5); ansi.StringWidth(got) > 5 {
+		t.Fatalf("ANSI sequence broken: %q", got)
+	}
+}
+
+func TestTableColumnsFitWidth(t *testing.T) {
+	for _, w := range []int{40, 50, 60, 78, 80, 96, 100, 114, 160} {
+		l := tableColumns(w)
+		if got := l.total(); got > w {
+			t.Fatalf("width=%d: table needs %d cells", w, got)
+		}
+	}
+	// Full-width terminal keeps every column.
+	full := tableColumns(120)
+	if !full.showStorage || !full.showNetwork {
+		t.Fatal("wide terminal dropped columns")
+	}
+	// Very narrow terminal still renders a usable table.
+	tiny := tableColumns(50)
+	if tiny.name < 8 {
+		t.Fatalf("narrow name column too small: %d", tiny.name)
 	}
 }

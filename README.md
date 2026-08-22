@@ -41,6 +41,8 @@ English | [中文](README_zh.md)
 - **Disk Cleanup (Prune)**: Clean up unused images and dangling volumes from the web dashboard. Preview candidates with a dry-run, confirm deletion with an explicit acknowledgement, and view a detailed result summary with audit log. Guests can preview; admin token is required to delete.
 - **Operation Audit Center**: Track who did what, when, to which container. Key write operations (start, stop, restart, exec) are persisted to an audit log with actor identity, source, timestamp, container, result, duration, and request context. The web dashboard provides a searchable audit view with filters, pagination, and JSON/Markdown export.
 - **Backup Snapshots**: Capture the current container scene as a portable zip archive before upgrades or host rebuilds. Preview the packing plan (zero disk writes), create an atomic archive with an operator note, and browse/download/delete past snapshots from the "BACKUPS" tab. Defaults to running containers only; optionally include stopped containers. Supports offline verification via `-no-docker` + JSON fixtures.
+- **Container File Transfer**: Browse, upload, download, and archive files inside containers from the "FILES" tab. Access is confined to a jail root (default `/tmp/dockerview-files`, configurable via `config.yaml`). Uploads use a preview/confirm two-step flow with explicit overwrite and missing-directory consent; folder downloads are streamed as tar archives; every transfer is audited.
+- **Configuration File & Layered Precedence**: Every setting resolves through one chain: CLI flag > `DOCKERVIEW_*` env var > `config.yaml` > built-in default. A commented sample `config.yaml` is written on first launch (or via `-config-init`) and never overwritten; tokens stay out of YAML (`-token`, `DOCKERVIEW_TOKEN`, or `token_file`).
 - **Color-coded Status**: Green for running, red for stopped/exited containers.
 - **CPU Alerts**: High CPU usage (>50%) highlighted in red.
 - **Auto-detection**: Automatically detects Docker socket (including Unix sockets, WSL, Colima, OrbStack, Podman, Rancher Desktop, etc.).
@@ -130,6 +132,38 @@ Capture the current container scene as a portable zip archive before host rebuil
 
 Archive layout: `manifest.json`, `containers.json`, `config/runtime.json`, `summaries/<id>-<name>.json` (redacted env), `README.txt`, and optional `images/*.tar` (when `include_images` is enabled). Sensitive env values are masked as `***MASKED***`; tokens and volumes are never included.
 
+#### Container File Transfer
+
+The "FILES" tab lets an admin browse and transfer files inside a container. Access is confined to the jail root (default `/tmp/dockerview-files` inside the container):
+
+```yaml
+# config.yaml
+files:
+  jail_root: /tmp/dockerview-files   # container-side whitelist root (absolute path)
+  max_file_bytes: 8388608            # per-transfer cap, 8 MiB
+  max_archive_bytes: 8388608
+  allow_guest_download: false        # guests (no token) cannot download by default
+```
+
+- **Browse / Download**: list any directory under the jail root, download single files, or stream a whole folder as a tar archive.
+- **Upload**: pick a file, preview the target (existing file? missing directories?), then confirm. Overwriting requires an explicit acknowledgement; creating missing directories (including the jail root itself) requires explicit consent.
+- Every operation is recorded in the audit log.
+
+#### Configuration File
+
+All settings live in one place: ConfigRoot (`~/.config/dockerview` by default, override with `DOCKERVIEW_CONFIG_DIR`). Precedence for every setting: CLI flag > `DOCKERVIEW_*` env var > `config.yaml` > built-in default.
+
+```bash
+# Write a commented sample into ConfigRoot and exit (never overwrites)
+./build/dockerview -config-init
+
+# Override anything via env or flag as before
+DOCKERVIEW_PORT=9090 ./build/dockerview -server
+./build/dockerview -server -port 9090
+```
+
+Secrets are never written to YAML: supply the admin token with `-token`, the `DOCKERVIEW_TOKEN` env var, or point `token_file:` at a file containing it.
+
 #### Security & Guest View Mode
 
 - **Guest View (Read-Only)**: Anyone can open the dashboard to view real-time telemetry (CPU/Memory loads, network, block I/O) without entering a token.
@@ -213,6 +247,9 @@ dockerview-go/
 ├── internal/
 │   ├── audit/               # Operation audit log (SQLite-backed)
 │   ├── backup/              # Backup snapshot manager & packer
+│   ├── config/              # Layered config resolution (CLI > env > yaml > default)
+│   ├── filejail/            # Path confinement & traversal defense for file transfer
+│   ├── files/               # Tar-based container copy engine (in/out/list/archive)
 │   ├── docker/               # Docker API client & health scoring
 │   ├── server/               # HTTP & SSE server
 │   │   ├── server.go         # Server logic & API endpoints

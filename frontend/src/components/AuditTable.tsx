@@ -88,7 +88,7 @@ export function AuditTable({ page, onChange }: Props) {
                           {it.payload && Object.keys(it.payload).length > 0 && (
                             <div className="md:col-span-2">
                               <div className="text-[10px] uppercase tracking-wider text-text-dim mb-1">Payload</div>
-                              <pre className="bg-[color:var(--code-bg,#0a0f1f)] border border-border-subtle rounded-[8px] p-2 text-[11px] font-mono overflow-x-auto text-text">
+                              <pre className="bg-[color:var(--theme-code-bg)] border border-border-subtle rounded-[8px] p-2 text-[11px] font-mono overflow-x-auto text-text">
                                 {JSON.stringify(it.payload, null, 2)}
                               </pre>
                             </div>
