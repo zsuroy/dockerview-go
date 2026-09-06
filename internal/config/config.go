@@ -30,6 +30,13 @@ const (
 	EnvFixture        = "DOCKERVIEW_FIXTURE"
 	EnvBackupDir      = "DOCKERVIEW_BACKUP_DIR"
 	EnvBackupMax      = "DOCKERVIEW_BACKUP_MAX"
+
+	EnvAgentEnabled    = "DOCKERVIEW_AGENT_ENABLED"
+	EnvAgentProvider   = "DOCKERVIEW_AGENT_PROVIDER"
+	EnvAgentBaseURL    = "DOCKERVIEW_AGENT_BASE_URL"
+	EnvAgentModel      = "DOCKERVIEW_AGENT_MODEL"
+	EnvAgentAPIKey     = "DOCKERVIEW_AGENT_API_KEY"
+	EnvAgentAPIKeyFile = "DOCKERVIEW_AGENT_API_KEY_FILE"
 )
 
 // ConfigFileName is the single human-edited config file under ConfigRoot.
@@ -55,6 +62,16 @@ const (
 	LayerYAML    Layer = "yaml"
 	LayerDefault Layer = "default"
 )
+
+// AgentConfig groups the duty agent (Genkit/OpenAI-compatible) settings.
+type AgentConfig struct {
+	Enabled    bool
+	Provider   string
+	BaseURL    string
+	Model      string
+	APIKey     string
+	APIKeyFile string
+}
 
 // FilesConfig groups the container file-transfer settings.
 type FilesConfig struct {
@@ -100,6 +117,9 @@ type Config struct {
 
 	NoDocker    bool
 	FixturePath string
+
+	// Agent config for the duty assistant (OpenAI-compatible).
+	Agent AgentConfig
 
 	Files FilesConfig
 
@@ -434,6 +454,63 @@ func resolveScalars(cfg *Config, cli CLI, getenv func(string) string, ym yamlMap
 		cfg.Sources["files_allow_guest_download"] = LayerDefault
 	}
 	cfg.Files = fc
+
+	// --- agent (duty assistant) --------------------------------------------
+	// The `agent:` table mirrors the other groups (files:). env always wins;
+	// the old flat agent_* keys are still honored for configs written before
+	// the group form existed. API keys are NEVER read from yaml.
+	ac := AgentConfig{
+		Provider: "openai-compatible",
+		BaseURL:  "https://api.openai.com/v1",
+		Model:    "gpt-4o-mini",
+	}
+	if v := strings.TrimSpace(getenv(EnvAgentEnabled)); v != "" {
+		ac.Enabled = parseEnvBool(v)
+		cfg.Sources["agent_enabled"] = LayerEnv
+	} else if v, ok := ym.getTable("agent", "enabled"); ok && strings.TrimSpace(v) != "" {
+		b, err := parseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("config: agent.enabled must be true or false, got %q", v)
+		}
+		ac.Enabled = b
+		cfg.Sources["agent_enabled"] = LayerYAML
+	} else if v, ok := ym.get("agent_enabled"); ok && strings.TrimSpace(v) != "" {
+		b, err := parseBool(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("config: agent_enabled must be true or false, got %q", v)
+		}
+		ac.Enabled = b
+		cfg.Sources["agent_enabled"] = LayerYAML
+	} else {
+		cfg.Sources["agent_enabled"] = LayerDefault
+	}
+	agentScalar := func(envKey, tableKey, flatKey, srcKey string, dst *string) {
+		if v := strings.TrimSpace(getenv(envKey)); v != "" {
+			*dst = v
+			cfg.Sources[srcKey] = LayerEnv
+		} else if v, ok := ym.getTable("agent", tableKey); ok && strings.TrimSpace(v) != "" {
+			*dst = strings.TrimSpace(v)
+			cfg.Sources[srcKey] = LayerYAML
+		} else if v, ok := ym.get(flatKey); ok && strings.TrimSpace(v) != "" {
+			*dst = strings.TrimSpace(v)
+			cfg.Sources[srcKey] = LayerYAML
+		} else {
+			cfg.Sources[srcKey] = LayerDefault
+		}
+	}
+	agentScalar(EnvAgentProvider, "provider", "agent_provider", "agent_provider", &ac.Provider)
+	agentScalar(EnvAgentBaseURL, "base_url", "agent_base_url", "agent_base_url", &ac.BaseURL)
+	agentScalar(EnvAgentModel, "model", "agent_model", "agent_model", &ac.Model)
+	// API key: env only (never from yaml). OPENAI_API_KEY is also checked by duty.Config.ResolveKey.
+	ac.APIKey = strings.TrimSpace(getenv(EnvAgentAPIKey))
+	if ac.APIKey != "" {
+		cfg.Sources["agent_api_key"] = LayerEnv
+	}
+	agentScalar(EnvAgentAPIKeyFile, "api_key_file", "agent_api_key_file", "agent_api_key_file", &ac.APIKeyFile)
+	if ac.APIKeyFile != "" {
+		ac.APIKeyFile = absPath(ac.APIKeyFile)
+	}
+	cfg.Agent = ac
 	return nil
 }
 

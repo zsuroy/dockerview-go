@@ -17,6 +17,7 @@ import (
 	"github.com/zsuroy/dockerview-go/internal/audit"
 	"github.com/zsuroy/dockerview-go/internal/backup"
 	"github.com/zsuroy/dockerview-go/internal/docker"
+	"github.com/zsuroy/dockerview-go/internal/duty"
 	"github.com/zsuroy/dockerview-go/internal/files"
 	"github.com/zsuroy/dockerview-go/internal/version"
 )
@@ -45,6 +46,20 @@ type Server struct {
 	copier         files.Copier
 	filesOpMu      sync.Mutex
 	filesInflight  map[string]bool
+	dutyAgent      dutyAgent
+	dutyWriteMu    sync.Mutex
+	dutyWrites     map[string]bool
+}
+
+// dutyAgent is the interface the server uses to interact with the duty agent.
+// It is implemented by *duty.Agent and is nil when the agent is disabled.
+type dutyAgent interface {
+	Ask(ctx context.Context, question, actor, actorKind, source string) (*duty.AskResult, error)
+	Mode() string
+	ModelName() string
+	BaseURL() string
+	Store() *duty.Store
+	Close() error
 }
 
 // NewServer creates a new Server instance.
@@ -64,7 +79,13 @@ func NewServer(cli *client.Client, token string, currentVersion, commit, buildDa
 		currentVersion: currentVersion,
 		commit:         commit,
 		buildDate:      buildDate,
+		dutyWrites:     make(map[string]bool),
 	}
+}
+
+// SetDutyAgent installs the duty agent. Pass nil to disable duty endpoints.
+func (s *Server) SetDutyAgent(a dutyAgent) {
+	s.dutyAgent = a
 }
 
 // SetAuditer installs (or replaces) the audit recorder. If nil, a no-op
@@ -154,6 +175,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/files/archive/preview", s.handleFilesArchivePreview)
 	mux.HandleFunc("/api/files/archive", s.handleFilesArchive)
 	mux.HandleFunc("/api/files/config", s.handleFilesConfig)
+	mux.HandleFunc("/api/duty/ask", s.handleDutyAsk)
+	mux.HandleFunc("/api/duty/tickets", s.handleDutyTickets)
+	mux.HandleFunc("/api/duty/confirm", s.handleDutyConfirm)
+	mux.HandleFunc("/api/duty/config", s.handleDutyConfig)
 	mux.HandleFunc("/api/files/", s.handleFilesNotFound)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Try to serve static file; if not found, fall back to index.html (SPA)

@@ -318,6 +318,89 @@ func TestFilesDefaultsFromYAML(t *testing.T) {
 	}
 }
 
+func TestAgentGroupFromYAML(t *testing.T) {
+	cfgDir := filepath.Join(t.TempDir(), "cfg")
+	writeYAML(t, cfgDir, "agent:\n  enabled: true\n  base_url: http://localhost:11434/v1\n  model: llama3.2\n")
+	cfg, err := ResolveWithEnv(CLI{}, envMap(map[string]string{EnvConfigDir: cfgDir}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Agent.Enabled {
+		t.Fatalf("agent.enabled should be true: %+v", cfg.Agent)
+	}
+	if cfg.Agent.BaseURL != "http://localhost:11434/v1" || cfg.Agent.Model != "llama3.2" ||
+		cfg.Agent.Provider != "openai-compatible" {
+		t.Fatalf("agent cfg = %+v", cfg.Agent)
+	}
+	if cfg.Sources["agent_enabled"] != LayerYAML || cfg.Sources["agent_model"] != LayerYAML {
+		t.Fatalf("sources wrong: %+v", cfg.Sources)
+	}
+	// Defaults when absent.
+	cfg2, err := ResolveWithEnv(CLI{}, envMap(map[string]string{EnvConfigDir: t.TempDir()}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg2.Agent.Enabled || cfg2.Agent.Model != "gpt-4o-mini" || cfg2.Agent.BaseURL != "https://api.openai.com/v1" {
+		t.Fatalf("agent defaults wrong: %+v", cfg2.Agent)
+	}
+}
+
+func TestAgentFlatFormStillAccepted(t *testing.T) {
+	// Configs written before the agent: group existed must keep working.
+	cfgDir := filepath.Join(t.TempDir(), "cfg")
+	writeYAML(t, cfgDir, "agent_enabled: true\nagent_model: gpt-4o-mini\n")
+	cfg, err := ResolveWithEnv(CLI{}, envMap(map[string]string{EnvConfigDir: cfgDir}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Agent.Enabled || cfg.Agent.Model != "gpt-4o-mini" {
+		t.Fatalf("flat form not honored: %+v", cfg.Agent)
+	}
+	if cfg.Sources["agent_enabled"] != LayerYAML {
+		t.Fatalf("agent_enabled source = %q", cfg.Sources["agent_enabled"])
+	}
+}
+
+func TestAgentEnvBeatsYAMLGroup(t *testing.T) {
+	cfgDir := filepath.Join(t.TempDir(), "cfg")
+	writeYAML(t, cfgDir, "agent:\n  enabled: false\n  model: yaml-model\n")
+	cfg, err := ResolveWithEnv(CLI{}, envMap(map[string]string{
+		EnvConfigDir:    cfgDir,
+		EnvAgentEnabled: "true",
+		EnvAgentModel:   "env-model",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Agent.Enabled || cfg.Agent.Model != "env-model" {
+		t.Fatalf("env should win: %+v", cfg.Agent)
+	}
+	if cfg.Sources["agent_enabled"] != LayerEnv || cfg.Sources["agent_model"] != LayerEnv {
+		t.Fatalf("sources wrong: %+v", cfg.Sources)
+	}
+}
+
+func TestAgentKeyFileFromGroupIsAbs(t *testing.T) {
+	cfgDir := filepath.Join(t.TempDir(), "cfg")
+	writeYAML(t, cfgDir, "agent:\n  enabled: true\n  api_key_file: relative-key\n")
+	cfg, err := ResolveWithEnv(CLI{}, envMap(map[string]string{EnvConfigDir: cfgDir}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(cfg.Agent.APIKeyFile) {
+		t.Fatalf("api_key_file should be absolute, got %q", cfg.Agent.APIKeyFile)
+	}
+}
+
+func TestAgentUnknownSubKeyRejected(t *testing.T) {
+	cfgDir := filepath.Join(t.TempDir(), "cfg")
+	writeYAML(t, cfgDir, "agent:\n  api_key: sekrit\n")
+	if _, err := ResolveWithEnv(CLI{}, envMap(map[string]string{EnvConfigDir: cfgDir})); err == nil ||
+		!strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("expected unknown sub-key error, got %v", err)
+	}
+}
+
 func TestAuditDisablePaths(t *testing.T) {
 	cfgDir := filepath.Join(t.TempDir(), "cfg")
 	writeYAML(t, cfgDir, "audit_enabled: false\n")

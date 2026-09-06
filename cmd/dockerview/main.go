@@ -17,6 +17,7 @@ import (
 	"github.com/zsuroy/dockerview-go/internal/backup"
 	"github.com/zsuroy/dockerview-go/internal/config"
 	"github.com/zsuroy/dockerview-go/internal/docker"
+	"github.com/zsuroy/dockerview-go/internal/duty"
 	"github.com/zsuroy/dockerview-go/internal/files"
 	"github.com/zsuroy/dockerview-go/internal/server"
 
@@ -208,6 +209,35 @@ func run() error {
 		} else {
 			srv.SetBackupManager(bmgr)
 			log.Printf("[INFO] Backup snapshots: dir=%s max=%d include_images_default=false", cfg.BackupDir, cfg.BackupMax)
+		}
+
+		// Duty agent (Genkit + OpenAI-compatible). Enabled via agent_enabled or
+		// DOCKERVIEW_AGENT_ENABLED. Without an API key it runs in fake/drill mode.
+		if cfg.Agent.Enabled {
+			dutyStore, dsErr := duty.OpenStore(filepath.Join(cfg.DBDir, "duty.db"))
+			if dsErr != nil {
+				log.Printf("[WARN] Duty ticket store unavailable: %v", dsErr)
+			}
+			dutySvc := server.NewDutyServices(srv)
+			dutyCfg := duty.Config{
+				Enabled:    cfg.Agent.Enabled,
+				Provider:   cfg.Agent.Provider,
+				BaseURL:    cfg.Agent.BaseURL,
+				Model:      cfg.Agent.Model,
+				APIKey:     cfg.Agent.APIKey,
+				APIKeyFile: cfg.Agent.APIKeyFile,
+			}
+			agent, agErr := duty.NewAgent(ctx, dutyCfg, dutySvc, dutyStore)
+			if agErr != nil {
+				log.Printf("[WARN] Duty agent unavailable: %v", agErr)
+			} else {
+				srv.SetDutyAgent(agent)
+				defer agent.Close()
+				if dutyStore != nil {
+					defer dutyStore.Close()
+				}
+				log.Printf("[INFO] Duty agent: mode=%s model=%s base_url=%s", agent.Mode(), agent.ModelName(), agent.BaseURL())
+			}
 		}
 
 		go func() {
