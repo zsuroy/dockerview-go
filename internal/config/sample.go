@@ -52,6 +52,19 @@ files:
   # Default false: guests (no token) cannot download. Read SECURITY.md
   # before enabling on a multi-user intranet.
   allow_guest_download: false
+
+# Duty assistant (Genkit + OpenAI-compatible model).
+# When enabled, a "Duty" tab appears in the web UI for natural-language
+# questions about containers, logs, and audit history.
+# The API key is NEVER stored in yaml. Use OPENAI_API_KEY or
+# DOCKERVIEW_AGENT_API_KEY, or point agent.api_key_file at a 0600 file.
+# Without a key the agent runs in fake/drill mode (scripted responses, no network).
+agent:
+  enabled: false
+  # provider: openai-compatible
+  # base_url: https://api.openai.com/v1
+  # model: gpt-4o-mini
+  # api_key_file: /etc/dockerview/agent_key
 `
 
 // WriteSample creates config.yaml in configDir from the commented sample,
@@ -78,7 +91,10 @@ var validTopKeys = map[string]bool{
 	"server": true, "port": true,
 	"audit_enabled": true, "audit_retention_days": true,
 	"backup_max": true, "data_root": true, "token_file": true,
-	"files": true,
+	"files": true, "agent": true,
+	// flat agent_* form is still accepted (pre-group configs).
+	"agent_enabled": true, "agent_provider": true, "agent_base_url": true,
+	"agent_model": true, "agent_api_key_file": true,
 }
 
 var validSubKeys = map[string]map[string]bool{
@@ -86,12 +102,16 @@ var validSubKeys = map[string]map[string]bool{
 		"jail_root": true, "max_file_bytes": true,
 		"max_archive_bytes": true, "allow_guest_download": true,
 	},
+	"agent": {
+		"enabled": true, "provider": true, "base_url": true,
+		"model": true, "api_key_file": true,
+	},
 }
 
 func validateYAML(m yamlMap) error {
 	for k := range m.values {
 		if !validTopKeys[k] {
-			return fmt.Errorf("unknown config key %q (allowed: server, port, audit_enabled, audit_retention_days, backup_max, data_root, token_file, files)", k)
+			return fmt.Errorf("unknown config key %q (allowed: server, port, audit_enabled, audit_retention_days, backup_max, data_root, token_file, files, agent/agent_*)", k)
 		}
 	}
 	for t, subs := range m.tables {

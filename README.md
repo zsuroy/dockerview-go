@@ -42,6 +42,7 @@ English | [中文](README_zh.md)
 - **Operation Audit Center**: Track who did what, when, to which container. Key write operations (start, stop, restart, exec) are persisted to an audit log with actor identity, source, timestamp, container, result, duration, and request context. The web dashboard provides a searchable audit view with filters, pagination, and JSON/Markdown export.
 - **Backup Snapshots**: Capture the current container scene as a portable zip archive before upgrades or host rebuilds. Preview the packing plan (zero disk writes), create an atomic archive with an operator note, and browse/download/delete past snapshots from the "BACKUPS" tab. Defaults to running containers only; optionally include stopped containers. Supports offline verification via `-no-docker` + JSON fixtures.
 - **Container File Transfer**: Browse, upload, download, and archive files inside containers from the "FILES" tab. Access is confined to a jail root (default `/tmp/dockerview-files`, configurable via `config.yaml`). Uploads use a preview/confirm two-step flow with explicit overwrite and missing-directory consent; folder downloads are streamed as tar archives; every transfer is audited.
+- **Duty Assistant (On-Call Copilot)**: Ask ops questions in plain language from the "DUTY" tab — "what containers are running?", "show me ERROR logs for api", "who restarted containers recently?" — and get evidence-backed answers compiled from live container state, logs, and the audit log (each answer shows the tool traces behind it). Mutating actions are only ever *proposed*: the expected impact is shown and execution requires explicit human confirmation with the admin token, fully audited.
 - **Configuration File & Layered Precedence**: Every setting resolves through one chain: CLI flag > `DOCKERVIEW_*` env var > `config.yaml` > built-in default. A commented sample `config.yaml` is written on first launch (or via `-config-init`) and never overwritten; tokens stay out of YAML (`-token`, `DOCKERVIEW_TOKEN`, or `token_file`).
 - **Color-coded Status**: Green for running, red for stopped/exited containers.
 - **CPU Alerts**: High CPU usage (>50%) highlighted in red.
@@ -148,6 +149,25 @@ files:
 - **Browse / Download**: list any directory under the jail root, download single files, or stream a whole folder as a tar archive.
 - **Upload**: pick a file, preview the target (existing file? missing directories?), then confirm. Overwriting requires an explicit acknowledgement; creating missing directories (including the jail root itself) requires explicit consent.
 - Every operation is recorded in the audit log.
+
+#### Duty Assistant (On-Call Copilot)
+
+The "DUTY" tab pairs the dashboard with an OpenAI-compatible LLM plug-in. Ask a question in plain language — the agent queries the live container list, tails logs, and searches recent audit events — and answers with the evidence (tool traces) inline. It is designed for first-line on-call triage: "api 502 了" → which containers, what the logs say, who touched the restart button.
+
+```yaml
+# config.yaml
+agent:
+  enabled: true
+  # provider: openai-compatible
+  # base_url: https://api.openai.com/v1   # any OpenAI-compatible endpoint
+  # model: gpt-4o-mini                    # e.g. Deepseek-v4-flash on a gateway
+  # api_key_file: /etc/dockerview/agent_key
+```
+
+- **API key**: never stored in YAML. Set `DOCKERVIEW_AGENT_API_KEY` (or `OPENAI_API_KEY`) in the environment, or point `api_key_file` at a 0600 file. Without a key the agent runs in **fake/drill mode** (scripted answers, no network).
+- **Env overrides**: `DOCKERVIEW_AGENT_ENABLED=1`, `DOCKERVIEW_AGENT_BASE_URL=…`, `DOCKERVIEW_AGENT_MODEL=…` behave the same as the YAML keys. The flat `agent_enabled`/`agent_model`/… form from older configs is still honored.
+- **Human-gated writes**: the agent only *proposes* mutating operations (start/stop/restart) with expected impact. Execution happens via `POST /api/duty/confirm` only after the admin token is confirmed — never automatically. Proposals and confirmations are recorded in the audit log.
+- **Tickets**: every Q&A is persisted to `data/db/duty.db` and inspectable from the panel.
 
 #### Configuration File
 

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.23] - 2026-09-06
+
+### Added
+
+- **Duty Assistant (On-Call Copilot)**: New "DUTY" tab in the web dashboard that answers natural-language questions about containers, logs, and audit history — "which container is in ERROR?", "who restarted anything last night?" — backed by a Genkit agent (`internal/duty`) with read-only tools (list containers, tail logs, query recent audit events). Every answer includes the tool traces used as evidence.
+  - **Human-gated writes**: The agent only ever *proposes* mutating operations (start/stop/restart) with the expected impact. Execution happens exclusively through `POST /api/duty/confirm` after verification with an admin token; proposals and confirmations are recorded in the audit log.
+  - **Model configuration**: `agent:` group in `config.yaml` with `enabled`, `provider`, `base_url`, `model`, and `api_key_file` (or the `DOCKERVIEW_AGENT_*` env vars). The API key is never read from YAML — use `DOCKERVIEW_AGENT_API_KEY` or `OPENAI_API_KEY`. Without a key the agent runs in **fake/drill mode** (scripted responses, no network) so the full tool loop can be exercised offline. The older flat `agent_*` keys are still accepted.
+  - **Ticket store**: Each inquiry is persisted to `data/db/duty.db` (question, answer, tool summary, write-confirmation status) and browsable from the panel.
+  - New endpoints: `GET /api/duty/config`, `POST /api/duty/ask`, `GET /api/duty/tickets`, `POST /api/duty/confirm`.
+  - Frontend duty panel is fully internationalized (English & 简体中文).
+
 ## [0.1.22] - 2026-08-22
 
 ### Added
