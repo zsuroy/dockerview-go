@@ -43,6 +43,7 @@ English | [中文](README_zh.md)
 - **Backup Snapshots**: Capture the current container scene as a portable zip archive before upgrades or host rebuilds. Preview the packing plan (zero disk writes), create an atomic archive with an operator note, and browse/download/delete past snapshots from the "BACKUPS" tab. Defaults to running containers only; optionally include stopped containers. Supports offline verification via `-no-docker` + JSON fixtures.
 - **Container File Transfer**: Browse, upload, download, and archive files inside containers from the "FILES" tab. Access is confined to a jail root (default `/tmp/dockerview-files`, configurable via `config.yaml`). Uploads use a preview/confirm two-step flow with explicit overwrite and missing-directory consent; folder downloads are streamed as tar archives; every transfer is audited.
 - **Duty Assistant (On-Call Copilot)**: Ask ops questions in plain language from the "DUTY" tab — "what containers are running?", "show me ERROR logs for api", "who restarted containers recently?" — and get evidence-backed answers compiled from live container state, logs, and the audit log (each answer shows the tool traces behind it). Mutating actions are only ever *proposed*: the expected impact is shown and execution requires explicit human confirmation with the admin token, fully audited.
+- **Network Topology (Read-only)**: The "Network" tab visualizes Docker networks as grouped frames and containers as nodes. Containers sharing a network are connected by membership-only edges (not traffic). Empty networks remain visible with a 0-container frame, and containers attached to multiple networks render once with all memberships shown in the detail card. Includes an interactive SVG graph with pan/zoom, node selection, per-network counts, and same-tree SVG export with grep-able names. The read-only `GET /api/networks/topology` endpoint is token-free for guests; there is no create/delete/connect route. The TUI also shows a network summary.
 - **Configuration File & Layered Precedence**: Every setting resolves through one chain: CLI flag > `DOCKERVIEW_*` env var > `config.yaml` > built-in default. A commented sample `config.yaml` is written on first launch (or via `-config-init`) and never overwritten; tokens stay out of YAML (`-token`, `DOCKERVIEW_TOKEN`, or `token_file`).
 - **Color-coded Status**: Green for running, red for stopped/exited containers.
 - **CPU Alerts**: High CPU usage (>50%) highlighted in red.
@@ -96,6 +97,7 @@ go run ./cmd/dockerview/
 | `r`         | Restart container |
 | `l`         | View logs         |
 | `e`         | Execute command   |
+| `n`         | Network topology  |
 | `q` / `Esc` | Back / Exit       |
 | `Ctrl+C`    | Exit application  |
 
@@ -168,6 +170,24 @@ agent:
 - **Env overrides**: `DOCKERVIEW_AGENT_ENABLED=1`, `DOCKERVIEW_AGENT_BASE_URL=…`, `DOCKERVIEW_AGENT_MODEL=…` behave the same as the YAML keys. The flat `agent_enabled`/`agent_model`/… form from older configs is still honored.
 - **Human-gated writes**: the agent only *proposes* mutating operations (start/stop/restart) with expected impact. Execution happens via `POST /api/duty/confirm` only after the admin token is confirmed — never automatically. Proposals and confirmations are recorded in the audit log.
 - **Tickets**: every Q&A is persisted to `data/db/duty.db` and inspectable from the panel.
+
+#### Network Topology (read-only)
+
+The "Network" tab visualizes `docker network ls` membership at a glance:
+
+- One frame per network (name, driver, container count); networks with zero members are still drawn — they are never filtered out.
+- One node per container, color-coded running vs stopped; a container attached to several networks appears once with every membership and per-network IP in its detail card.
+- Edges connect containers that share a network; they represent membership only and never map traffic or rx/tx stats.
+- **Guest access**: reading the topology and exporting SVG needs no token. There is no UI or API for deleting networks or attaching/detaching containers.
+- **Same-tree SVG export**: the button serializes the on-screen SVG with resolved theme colors; network and container names are text in the file.
+- **TUI summary**: press `n` in the terminal for network/driver/count lines; press `q`/`Esc` to return.
+
+Offline acceptance and demos use a fixture:
+
+```bash
+dockerview -server -no-docker -network-fixture internal/netview/testdata/topology.json
+curl -s localhost:8080/api/networks/topology | jq '.networks[].name'
+```
 
 #### Configuration File
 

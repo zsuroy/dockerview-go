@@ -379,5 +379,30 @@
     "errorFallback": "获取响应失败",
     "confirmFailed": "确认失败",
     "confirmedMsg": "已对 {{name}}（{{id}}）确认执行 {{op}}，操作已执行并记录审计。"
+  },
+  "network": {
+    "nav": "网络",
+    "title": "网络拓扑",
+    "guestBadge": "访客 · 只读",
+    "summary": "{{nets}} 张网络 · {{nodes}} 个容器节点",
+    "refresh": "刷新",
+    "export": "导出 SVG",
+    "loading": "正在加载网络拓扑…",
+    "emptyAll": "没有返回任何网络。",
+    "emptyHint": "empty network",
+    "containerCount": "{{count}} 容器",
+    "internal": "internal",
+    "runningTag": "运行中",
+    "stoppedTag": "已停止",
+    "errorTitle": "无法获取网络拓扑",
+    "retry": "重试",
+    "cardHint": "没有 IP 时显示 empty。不展示环境变量、挂载、健康信息和原始 inspect JSON。",
+    "annotationTitle": "网络计数（仅旁注）",
+    "colNetwork": "网络",
+    "colDriver": "driver",
+    "colTotal": "总数",
+    "colRunning": "运行",
+    "colStopped": "停止",
+    "legendHint": "连线只表示同一张网络上的成员关系，不表示流量。空网络保留在图上和 SVG 导出文件里。"
   }
 }

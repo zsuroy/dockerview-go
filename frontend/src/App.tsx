@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid, Archive, FolderOpen, Bot } from 'lucide-react';
+import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid, Archive, FolderOpen, Bot, Network } from 'lucide-react';
 import type { ToastMessage } from './types';
 import { formatBytes, basePath } from './utils';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -16,6 +16,7 @@ import { AuditPanel } from './components/AuditPanel';
 import { BackupPanel } from './components/BackupPanel';
 import { FilesPanel } from './components/FilesPanel';
 import { DutyPanel } from './components/duty/DutyPanel';
+import NetworkPanel from './network/NetworkPanel';
 
 interface VersionInfo {
   current_version: string;
@@ -62,8 +63,8 @@ export default function App() {
     | { kind: 'files'; containerId?: string };
   const [pendingAction, setPendingAction] = useState<PendingActionType | null>(null);
 
-  // Active top-level view: containers, audit, backups or files
-  const [view, setView] = useState<'containers' | 'audit' | 'backups' | 'files' | 'duty'>('containers');
+  // Active top-level view: containers, audit, backups, files, duty, or network
+  const [view, setView] = useState<'containers' | 'audit' | 'backups' | 'files' | 'duty' | 'network'>('containers');
   const [filesContainerId, setFilesContainerId] = useState<string | undefined>(undefined);
 
   // Modals & Toasts
@@ -426,6 +427,13 @@ export default function App() {
           >
             <Bot className="w-3.5 h-3.5" />{t('duty.nav')}
           </button>
+          <button
+            onClick={() => setView('network')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[12px] tracking-wider uppercase border transition-all ${view === 'network' ? 'bg-accent-cyan/15 border-accent-cyan/50 text-accent-cyan' : 'bg-surface-1 border-border-light text-text-dim hover:text-text'}`}
+            data-testid="nav-network"
+          >
+            <Network className="w-3.5 h-3.5" />{t('network.nav')}
+          </button>
         </div>
 
         {view === 'audit' ? (
@@ -454,16 +462,18 @@ export default function App() {
             onToast={showToast}
           />
          ) : view === 'duty' ? (
-          <DutyPanel
-            serverToken={serverToken}
-            onAuthRequired={() => {
-              localStorage.removeItem('dockerview_token');
-              setServerToken('');
-              setAuthError(true);
-              setShowAuthModal(true);
-            }}
-          />
-         ) : (
+           <DutyPanel
+             serverToken={serverToken}
+             onAuthRequired={() => {
+               localStorage.removeItem('dockerview_token');
+               setServerToken('');
+               setAuthError(true);
+               setShowAuthModal(true);
+             }}
+           />
+          ) : view === 'network' ? (
+           <NetworkPanel />
+          ) : (
            <>
              {/* Aggregate Stats Dashboard */}
              <SummaryDashboard

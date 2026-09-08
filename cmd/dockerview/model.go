@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/zsuroy/dockerview-go/internal/docker"
+	"github.com/zsuroy/dockerview-go/internal/netview"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -33,6 +34,11 @@ type model struct {
 	statusTimer  *time.Timer
 	dockerClient *dockerclient.Client
 
+	networkMode     bool
+	topology        *netview.Topology
+	topologyErr     error
+	topologyLoading bool
+
 	termWidth int
 }
 
@@ -53,6 +59,11 @@ type logsMsg struct {
 type execMsg struct {
 	result docker.ExecResult
 	err    error
+}
+
+type topologyMsg struct {
+	topo *netview.Topology
+	err  error
 }
 
 var (
@@ -160,6 +171,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.execErr = nil
 			m.execResult = &msg.result
+		}
+		return m, nil
+
+	case topologyMsg:
+		m.topologyLoading = false
+		if msg.err != nil {
+			m.topologyErr = msg.err
+			m.topology = nil
+		} else {
+			m.topologyErr = nil
+			m.topology = msg.topo
 		}
 		return m, nil
 
@@ -292,6 +314,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.execRunning = false
 				}
 			}
+			if !m.actionMode && !m.logsMode && !m.execMode {
+				switch msg.String() {
+				case "n":
+					m.networkMode = !m.networkMode
+					if m.networkMode {
+						m.topologyErr = nil
+						m.topologyLoading = true
+						return m, m.fetchTopology()
+					}
+				case "q":
+					m.networkMode = false
+					m.topology = nil
+					m.topologyErr = nil
+				}
+			}
 		}
 	}
 	return m, nil
@@ -375,12 +412,35 @@ func (m *model) runExec(cmd string) tea.Cmd {
 	}
 }
 
+func (m *model) fetchTopology() tea.Cmd {
+	return func() tea.Msg {
+		m.mu.RLock()
+		cli := m.dockerClient
+		m.mu.RUnlock()
+
+		if cli == nil {
+			return topologyMsg{err: fmt.Errorf("docker client not available")}
+		}
+
+		provider := docker.NewTopologyProvider(cli)
+		topo, err := provider.Topology(context.Background())
+		if err != nil {
+			return topologyMsg{err: err}
+		}
+		netview.Normalize(topo)
+		return topologyMsg{topo: topo}
+	}
+}
+
 func (m *model) View() string {
 	if m.execMode {
 		return m.viewExec()
 	}
 	if m.logsMode {
 		return m.viewLogs()
+	}
+	if m.networkMode {
+		return m.viewNetwork()
 	}
 
 	m.mu.RLock()
@@ -389,7 +449,7 @@ func (m *model) View() string {
 	m.mu.RUnlock()
 
 	title := styleTitle.Render("DockerView Monitor " + Version)
-	subtitle := styleSubtitle.Render("Press Ctrl+C to exit | ↑↓ Select | Enter Actions")
+	subtitle := styleSubtitle.Render("Press Ctrl+C to exit | ↑↓ Select | Enter Actions | n Network")
 
 	// Column plan adapts to the live terminal width: narrow terminals drop
 	// the Storage column first, then Network, so the table never overflows.
@@ -527,4 +587,46 @@ func (m *model) viewExec() string {
 		body = prompt
 		return styleLogs.Render(fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, body))
 	}
+}
+
+func (m *model) viewNetwork() string {
+	m.mu.RLock()
+	topology := m.topology
+	topologyErr := m.topologyErr
+	loading := m.topologyLoading
+	m.mu.RUnlock()
+
+	title := styleTitle.Render("Network Topology")
+	subtitle := styleSubtitle.Render("Press n again or q/Esc to return")
+
+	if loading {
+		return styleBorder.Render(fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, styleEmpty.Render("Loading...")))
+	}
+
+	if topologyErr != nil {
+		return styleBorder.Render(fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, styleError.Render("Error: "+topologyErr.Error())))
+	}
+
+	if topology == nil || len(topology.Networks) == 0 {
+		return styleBorder.Render(fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, styleEmpty.Render("No networks reported.")))
+	}
+
+	var rows []string
+	for _, n := range topology.Networks {
+		running := 0
+		for _, c := range n.Containers {
+			if c.Running {
+				running++
+			}
+		}
+		row := lipgloss.JoinHorizontal(lipgloss.Top,
+			styleName.Render(n.Name),
+			styleNetwork.Render(n.Driver),
+			styleStatus.Render(fmt.Sprintf("%d/%d", running, len(n.Containers))),
+		)
+		rows = append(rows, row)
+	}
+
+	content := fmt.Sprintf("%s\n%s\n\n%s", title, subtitle, strings.Join(rows, "\n"))
+	return styleBorder.Render(content)
 }

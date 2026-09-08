@@ -19,6 +19,7 @@ import (
 	"github.com/zsuroy/dockerview-go/internal/docker"
 	"github.com/zsuroy/dockerview-go/internal/duty"
 	"github.com/zsuroy/dockerview-go/internal/files"
+	"github.com/zsuroy/dockerview-go/internal/netview"
 	"github.com/zsuroy/dockerview-go/internal/version"
 )
 
@@ -42,6 +43,7 @@ type Server struct {
 	upgradeMu      sync.Mutex
 	upgradeRunning bool
 	backupMgr      *backup.Manager
+	topology       netview.Provider
 	files          filesSettings
 	copier         files.Copier
 	filesOpMu      sync.Mutex
@@ -155,6 +157,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/container/exec", s.handleContainerExec)
 	mux.HandleFunc("/api/version", s.handleVersion)
 	mux.HandleFunc("/api/upgrade", s.handleUpgrade)
+	// Network topology: read-only, open to guests (mirrors /data).
+	mux.HandleFunc("/api/networks/topology", s.handleNetworkTopology)
+
 	mux.HandleFunc("/api/prune/candidates", s.handlePruneCandidates)
 	mux.HandleFunc("/api/prune/dry-run", s.handlePruneDryRun)
 	mux.HandleFunc("/api/prune/confirm", s.handlePruneConfirm)
