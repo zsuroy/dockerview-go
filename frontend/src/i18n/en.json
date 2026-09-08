@@ -379,5 +379,30 @@
     "errorFallback": "Failed to get response",
     "confirmFailed": "Confirm failed",
     "confirmedMsg": "{{op}} confirmed for {{name}} ({{id}}). The operation was executed and audited."
+  },
+  "network": {
+    "nav": "Network",
+    "title": "Network topology",
+    "guestBadge": "Guest · read-only",
+    "summary": "{{nets}} networks · {{nodes}} container nodes",
+    "refresh": "Refresh",
+    "export": "Export SVG",
+    "loading": "Loading network topology…",
+    "emptyAll": "No networks reported.",
+    "emptyHint": "empty network",
+    "containerCount": "{{count}} containers",
+    "internal": "internal",
+    "runningTag": "RUNNING",
+    "stoppedTag": "STOPPED",
+    "errorTitle": "Network topology unavailable",
+    "retry": "Retry",
+    "cardHint": "Empty IP renders as empty. Env, mounts, health and raw inspect JSON are not shown.",
+    "annotationTitle": "Network counts",
+    "colNetwork": "Network",
+    "colDriver": "Driver",
+    "colTotal": "Total",
+    "colRunning": "Running",
+    "colStopped": "Stopped",
+    "legendHint": "Edges mean shared network membership only; they never represent traffic. Empty networks are kept in the graph and in the SVG export."
   }
 }

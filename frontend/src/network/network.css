@@ -1,0 +1,104 @@
+/* Network topology graph. Only existing --theme-* tokens are used, so the
+   graph follows the light/dark themes; no separate theme system is added. */
+
+.network-graph {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 14px;
+  background: var(--theme-surface-1);
+  border: 1px solid var(--theme-border-light);
+  cursor: grab;
+}
+.network-graph:active {
+  cursor: grabbing;
+}
+
+.network-frame {
+  fill: rgba(0, 143, 163, 0.06);
+  stroke: rgba(0, 143, 163, 0.35);
+  stroke-width: 1.2;
+  stroke-dasharray: 7 5;
+}
+[data-theme='dark'] .network-frame {
+  fill: rgba(0, 242, 255, 0.05);
+  stroke: rgba(0, 242, 255, 0.32);
+}
+.network-frame.empty {
+  fill: var(--theme-surface-2);
+  stroke: var(--theme-border-strong);
+  stroke-dasharray: 3 5;
+}
+.network-frame.internal {
+  stroke-dasharray: 12 6;
+}
+
+.net-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  fill: var(--theme-accent-cyan);
+}
+.net-count {
+  font-size: 11px;
+  fill: var(--theme-text-dim);
+}
+.net-meta {
+  font-size: 10px;
+  fill: var(--theme-text-dim);
+  letter-spacing: 0.04em;
+}
+.net-empty-hint {
+  font-size: 11px;
+  fill: var(--theme-text-dim);
+}
+
+.net-edge {
+  stroke: var(--theme-border-strong);
+  stroke-width: 1.4;
+  opacity: 0.85;
+  transition: stroke 0.15s ease;
+}
+.net-edge:hover {
+  stroke: var(--theme-accent-cyan);
+}
+
+.container-node {
+  cursor: pointer;
+}
+.container-node rect.body {
+  stroke-width: 1.4;
+}
+.container-node.running rect.body {
+  fill: rgba(0, 143, 163, 0.12);
+  stroke: var(--theme-accent-cyan);
+}
+[data-theme='dark'] .container-node.running rect.body {
+  fill: rgba(0, 242, 255, 0.1);
+}
+.container-node.stopped rect.body {
+  fill: var(--theme-surface-2);
+  stroke: var(--theme-text-dim);
+  stroke-dasharray: 4 3;
+}
+.container-node text.cname {
+  fill: var(--theme-text);
+  font-size: 12.5px;
+  font-weight: 800;
+  pointer-events: none;
+}
+.container-node text.state-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+.container-node.stopped text.state-tag {
+  fill: var(--theme-warning);
+}
+.container-node.selected rect.body {
+  stroke-width: 2.2;
+}
+.status-dot {
+  stroke: none;
+}

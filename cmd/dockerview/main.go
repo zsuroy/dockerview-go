@@ -19,6 +19,7 @@ import (
 	"github.com/zsuroy/dockerview-go/internal/docker"
 	"github.com/zsuroy/dockerview-go/internal/duty"
 	"github.com/zsuroy/dockerview-go/internal/files"
+	"github.com/zsuroy/dockerview-go/internal/netview"
 	"github.com/zsuroy/dockerview-go/internal/server"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -176,7 +177,7 @@ func run() error {
 		}()
 
 		// Backup snapshot manager: docker-backed in production, fixture/mock
-		// under -no-docker so acceptance can run offline (BACKUP_DESIGN §7).
+		// under -no-docker so acceptance can run offline.
 		var provider backup.Provider
 		switch {
 		case client != nil:
@@ -209,6 +210,20 @@ func run() error {
 		} else {
 			srv.SetBackupManager(bmgr)
 			log.Printf("[INFO] Backup snapshots: dir=%s max=%d include_images_default=false", cfg.BackupDir, cfg.BackupMax)
+		}
+
+		// Network topology: read-only, open to guests. Daemon-backed in
+		// production, fixture-backed under -no-docker.
+		switch {
+		case client != nil:
+			srv.SetTopologyProvider(docker.NewTopologyProvider(client))
+		case cfg.FixturePath != "":
+			fp, fpErr := netview.NewFixtureProvider(cfg.FixturePath)
+			if fpErr != nil {
+				return fpErr
+			}
+			srv.SetTopologyProvider(fp)
+			log.Printf("[INFO] Network topology: fixture=%s", cfg.FixturePath)
 		}
 
 		// Duty agent (Genkit + OpenAI-compatible). Enabled via agent_enabled or
@@ -406,6 +421,7 @@ func printHelp() {
 	fmt.Println("  r         Restart container")
 	fmt.Println("  l         View logs")
 	fmt.Println("  e         Execute command")
+	fmt.Println("  n         Network topology")
 	fmt.Println("  q/Esc     Back / Exit")
 	fmt.Println("  Ctrl+C    Exit application")
 	fmt.Println()

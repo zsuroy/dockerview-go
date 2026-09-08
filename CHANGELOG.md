@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.24] - 2026-09-08
+
+### Added
+
+- **Read-only Network Topology**: New "Network" tab in the web dashboard that visualizes Docker networks as grouped frames and containers as nodes. Containers sharing a network are connected by membership-only edges (never traffic). Empty networks remain visible with a 0-container frame, and containers attached to multiple networks render once with all memberships shown in the detail card. Includes an interactive SVG graph with pan/zoom, node selection with per-network IP details, network counts table, and same-tree SVG export with grep-able names. New backend endpoint `GET /api/networks/topology` is read-only and token-free for guests; there is no create/delete/connect/disconnect route. New packages: `internal/netview` (read-only topology DTO, normalize, fixture loader), `internal/docker/topology.go` (daemon-backed adapter), `internal/server/network_handlers.go` (HTTP handler). Frontend additions under `frontend/src/network/`: `NetworkPanel.tsx`, `api.ts`, `types.ts`, `layout.ts` (d3-force deterministic layout), `exportSvg.ts`, `edgeKey.ts`, `network.css`. The TUI also shows a network summary on `n`.
+
 ## [0.1.23] - 2026-09-06
 
 ### Added

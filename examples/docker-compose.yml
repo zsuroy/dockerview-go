@@ -1,0 +1,28 @@
+services:
+  demo-nginx:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./demo/nginx/index.html:/usr/share/nginx/html/index.html:ro
+    restart: unless-stopped
+
+  demo-redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  demo-api:
+    image: hashicorp/http-echo:latest
+    ports:
+      - "8082:5678"
+    command:
+      - -text="Hello from Dockerview-Go demo API"
+      - -listen=:5678
+    restart: unless-stopped
+
+  demo-busybox:
+    image: busybox:latest
+    command: sleep 3600
+    restart: unless-stopped
