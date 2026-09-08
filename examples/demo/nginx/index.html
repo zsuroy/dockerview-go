@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DockerView-Go — Beautiful Docker Monitoring</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-0: #020617;
+      --bg-1: #0F172A;
+      --bg-2: #1E293B;
+      --text-0: #F8FAFC;
+      --text-1: #94A3B8;
+      --text-2: #64748B;
+      --accent: #00f2ff;
+      --accent-2: #01f6ff;
+      --border: rgba(148, 163, 184, 0.12);
+      --glass: rgba(15, 23, 42, 0.6);
+      --glass-border: rgba(148, 163, 184, 0.15);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-0);
+      color: var(--text-0);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 242, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 242, 255, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Radial glow */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(0, 242, 255, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Nav */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      background: rgba(2, 6, 23, 0.8);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .nav-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text-0);
+      text-decoration: none;
+    }
+
+    .nav-brand svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text-1);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--accent);
+    }
+
+    .nav-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(0, 242, 255, 0.1);
+      border: 1px solid rgba(0, 242, 255, 0.25);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+
+    .nav-badge:hover {
+      background: rgba(0, 242, 255, 0.18);
+      border-color: rgba(0, 242, 255, 0.5);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      background: rgba(0, 242, 255, 0.08);
+      border: 1px solid rgba(0, 242, 255, 0.2);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 28px;
+      animation: pulse-border 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(0, 242, 255, 0.2); }
+      50% { border-color: rgba(0, 242, 255, 0.5); }
+    }
+
+    .hero h1 {
+      font-size: clamp(40px, 7vw, 72px);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 .docker {
+      color: var(--text-1);
+      font-weight: 300;
+    }
+
+    .hero h1 .view {
+      color: var(--text-0);
+    }
+
+    .hero h1 .dot-go {
+      color: var(--accent);
+    }
+
+    .hero p {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--text-1);
+      max-width: 600px;
+      margin: 0 auto 36px;
+      font-weight: 400;
+      line-height: 1.7;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--bg-0);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-2);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 242, 255, 0.25);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-0);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--text-1);
+      background: rgba(148, 163, 184, 0.05);
+    }
+
+    /* Stats */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin: 60px 0 100px;
+    }
+
+    .stat-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 22px 20px;
+      text-align: center;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s;
+    }
+
+    .stat-card:hover {
+      border-color: rgba(0, 242, 255, 0.3);
+      transform: translateY(-3px);
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-2);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    /* Section titles */
+    .section {
+      margin: 100px 0;
+    }
+
+    .section-title {
+      font-size: 32px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 12px;
+      letter-spacing: -0.01em;
+    }
+
+    .section-subtitle {
+      text-align: center;
+      color: var(--text-1);
+      font-size: 16px;
+      margin-bottom: 48px;
+    }
+
+    /* Features */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 18px;
+    }
+
+    .feature-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 26px;
+      backdrop-filter: blur(8px);
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(0, 242, 255, 0.3);
+      transform: translateY(-3px);
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: rgba(0, 242, 255, 0.1);
+      border: 1px solid rgba(0, 242, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      font-size: 18px;
+    }
+
+    .feature-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-1);
+      line-height: 1.6;
+    }
+
+    /* Install */
+    .install-block {
+      background: var(--bg-1);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--text-1);
+      overflow-x: auto;
+      position: relative;
+    }
+
+    .install-block .cmd {
+      color: var(--accent);
+    }
+
+    .install-block .comment {
+      color: var(--text-2);
+    }
+
+    .install-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    /* Demo */
+    .demo-wrapper {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--glass-border);
+      background: var(--bg-1);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    }
+
+    .demo-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 18px;
+      background: rgba(15, 23, 42, 0.8);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .demo-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--text-2);
+    }
+
+    .demo-dot:nth-child(1) { background: #EF4444; }
+    .demo-dot:nth-child(2) { background: #F59E0B; }
+    .demo-dot:nth-child(3) { background: #22C55E; }
+
+    .demo-body {
+      padding: 0;
+    }
+
+    .demo-body img {
+      width: 100%;
+      display: block;
+      opacity: 0.9;
+    }
+
+    /* Tech stack */
+    .tech-stack {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 36px;
+    }
+
+    .tech-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-1);
+    }
+
+    .tech-tag .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(0, 242, 255, 0.5);
+    }
+
+    /* CTA */
+    .cta-section {
+      text-align: center;
+      padding: 80px 0;
+      position: relative;
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(0, 242, 255, 0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-section h2 {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .cta-section p {
+      color: var(--text-1);
+      font-size: 16px;
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
+      text-align: center;
+      color: var(--text-2);
+      font-size: 13px;
+    }
+
+    footer a {
+      color: var(--text-1);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--accent);
+    }
+
+    /* Mobile */
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      .hero { padding: 120px 0 60px; }
+      .features { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="nav-brand">
+        <svg viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="200" cy="200" r="190" fill="#0F172A" stroke="#1E293B" stroke-width="2"/>
+          <path d="M130 165 L270 165 Q310 165 310 200 L310 220 Q310 250 270 250 L150 250 Q110 250 95 230 Q85 215 100 200 Z" fill="#0F172A" stroke="#00f2ff" stroke-width="1.5"/>
+          <circle cx="125" cy="205" r="3" fill="#00f2ff"/>
+        </svg>
+        DockerView
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="#demo">Demo</a>
+        <a href="https://github.com/zsuroy/dockerview-go" target="_blank" rel="noopener" class="nav-badge">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:#00f2ff;box-shadow:0 0 6px #00f2ff;"></span>
+        v1.0 — Now with Web Dashboard & Mobile App
+      </div>
+      <h1>
+        <span class="docker">Docker</span><span class="view">View</span><span class="dot-go">.go</span>
+      </h1>
+      <p>
+        A beautiful terminal-based Docker container monitoring tool built with Go and bubbletea, featuring a gorgeous real-time web dashboard.
+      </p>
+      <div class="hero-actions">
+        <a href="#install" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Quick Install
+        </a>
+        <a href="https://github.com/zsuroy/dockerview-go" target="_blank" rel="noopener" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          Star on GitHub
+        </a>
+      </div>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-value">1s</div>
+          <div class="stat-label">Real-time refresh</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">0-100</div>
+          <div class="stat-label">Health scoring</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">SSE</div>
+          <div class="stat-label">Live web streaming</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">2x</div>
+          <div class="stat-label">TUI + Web + Mobile</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="section">
+    <div class="container">
+      <h2 class="section-title">Features</h2>
+      <p class="section-subtitle">Everything you need to monitor and manage Docker containers</p>
+      <div class="features">
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4CA;</div>
+          <h3>Real-time Monitoring</h3>
+          <p>Updates every second with CPU, memory, network, and block I/O metrics for all running containers.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4BB;</div>
+          <h3>Beautiful TUI</h3>
+          <p>Built with bubbletea and lipgloss. Keybindings for start, stop, restart, inline logs, and exec.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F310;</div>
+          <h3>Web Dashboard</h3>
+          <p>Glassmorphism UI with live SVG sparklines, status filters, search highlighting, and 3D hover effects.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4F1;</div>
+          <h3>Mobile App</h3>
+          <p>Expo / React Native client mirrors the dashboard on your phone with full controls and bilingual support.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F6E1;&#xFE0F;</div>
+          <h3>Token Security</h3>
+          <p>Secured control API with token verification. Guest read-only mode and localStorage session tokens.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F50D;</div>
+          <h3>Health Scoring</h3>
+          <p>Dynamic 0-100 health score based on CPU, memory, disk I/O, restarts, and uptime with neon indicators.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4DD;</div>
+          <h3>Inline Logs</h3>
+          <p>Advanced web modal with keyword search, log level filters, tail control, highlighting, and instant download.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4BB;</div>
+          <h3>Command Execution</h3>
+          <p>Execute shell commands inside running containers from TUI or web. Quick templates, separated output, copy helper.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4C2;</div>
+          <h3>Backup Snapshots</h3>
+          <p>Portable zip archives of your container scene. Preview, create, browse, and download with audit trail.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F3E0;</div>
+          <h3>Web Container Controls</h3>
+          <p>Start, stop, and restart containers directly from the web dashboard with token-gated actions.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F517;</div>
+          <h3>Port Mappings Visualizer</h3>
+          <p>Displays container port mappings and exposed ports as interactive badges and clean tags on dashboard cards.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4D0;</div>
+          <h3>Color-coded Status</h3>
+          <p>Green for running, red for stopped/exited. High CPU usage highlighted in red for instant visual triage.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4E9;</div>
+          <h3>One-Click Web Upgrade</h3>
+          <p>Browser-based self-upgrades next to the version badge. Queries GitHub releases, detects install type, and streams progress.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F30A;</div>
+          <h3>Theme Toggle</h3>
+          <p>Real-time light and dark theme switching with automatic system color-scheme preference detection.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F310;</div>
+          <h3>Multi-language Support</h3>
+          <p>Interactive web dashboard supports language toggling between English and Chinese via the navigation header.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F6AE;&#xFE0F;</div>
+          <h3>Disk Cleanup (Prune)</h3>
+          <p>Preview and remove unused images and dangling volumes from the dashboard with dry-run and audit logging.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4CB;</div>
+          <h3>Operation Audit Center</h3>
+          <p>Searchable audit log with filters, pagination, and JSON/Markdown export for start, stop, restart, and exec events.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4C1;</div>
+          <h3>Container File Transfer</h3>
+          <p>Browse, upload, download, and archive files inside containers from the FILES tab with jail-root confinement.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F916;</div>
+          <h3>Duty Assistant</h3>
+          <p>Plain-language on-call copilot answers ops questions with evidence from live state, logs, and audit events.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x2699;&#xFE0F;</div>
+          <h3>Layered Configuration</h3>
+          <p>Every setting resolves through CLI flag &gt; env var &gt; config.yaml &gt; built-in default. Sample config generated on first launch.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4D0;</div>
+          <h3>Color-coded Status</h3>
+          <p>Green for running, red for stopped/exited. High CPU usage highlighted in red for instant visual triage.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F4BB;</div>
+          <h3>Auto-detection</h3>
+          <p>Automatically detects Docker socket paths including standard, Colima, WSL, OrbStack, Podman, and Rancher Desktop.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">&#x1F5FA;&#xFE0F;</div>
+          <h3>Network Topology</h3>
+          <p>Visualize container network relationships and connections in an interactive topology graph on the dashboard.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" class="section">
+    <div class="container">
+      <h2 class="section-title">Quick Install</h2>
+      <p class="section-subtitle">Get started in seconds with a single command</p>
+      <div class="install-grid">
+        <div>
+          <div style="font-size:13px;color:var(--text-2);margin-bottom:8px;font-weight:500;">Using go install</div>
+          <div class="install-block">
+            <span class="comment"># Install latest release</span><br>
+            <span class="cmd">go install</span> github.com/zsuroy/dockerview-go/cmd/dockerview@latest
+          </div>
+        </div>
+        <div>
+          <div style="font-size:13px;color:var(--text-2);margin-bottom:8px;font-weight:500;">From source</div>
+          <div class="install-block">
+            <span class="comment"># Clone, build, and run</span><br>
+            git clone https://github.com/zsuroy/dockerview-go.git<br>
+            <span class="cmd">cd</span> dockerview-go && make build<br>
+            ./build/dockerview
+          </div>
+        </div>
+        <div>
+          <div style="font-size:13px;color:var(--text-2);margin-bottom:8px;font-weight:500;">Enable web dashboard</div>
+          <div class="install-block">
+            <span class="comment"># Start with HTTP server on port 8080</span><br>
+            <span class="cmd">dockerview -server</span><br><br>
+            <span class="comment"># Open in browser</span><br>
+            <span class="cmd">open</span> http://localhost:8080
+          </div>
+        </div>
+      </div>
+
+      <div class="tech-stack">
+        <div class="tech-tag"><span class="dot"></span>Go 1.24+</div>
+        <div class="tech-tag"><span class="dot"></span>Bubbletea</div>
+        <div class="tech-tag"><span class="dot"></span>React 19</div>
+        <div class="tech-tag"><span class="dot"></span>TypeScript</div>
+        <div class="tech-tag"><span class="dot"></span>Docker SDK</div>
+        <div class="tech-tag"><span class="dot"></span>SSE Streaming</div>
+        <div class="tech-tag"><span class="dot"></span>Expo / React Native</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="demo" class="section">
+    <div class="container">
+      <h2 class="section-title">Demo</h2>
+      <p class="section-subtitle">See DockerView-Go in action</p>
+      <div class="demo-wrapper">
+        <div class="demo-header">
+          <div class="demo-dot"></div>
+          <div class="demo-dot"></div>
+          <div class="demo-dot"></div>
+          <span style="margin-left:12px;font-size:13px;color:var(--text-2);font-weight:500;">DockerView-Go — TUI + Web Dashboard</span>
+        </div>
+        <div class="demo-body">
+          <img src="../assets/demo.gif" alt="DockerView Go Demo" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-section">
+    <div class="container">
+      <h2>Ready to monitor your containers?</h2>
+      <p>Open-source, blazing fast, and beautifully designed.</p>
+      <div class="hero-actions">
+        <a href="https://github.com/zsuroy/dockerview-go" target="_blank" rel="noopener" class="btn btn-primary">
+          View on GitHub
+        </a>
+        <a href="#install" class="btn btn-secondary">
+          Get Started
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>
+        Built with &#x2764;&#xFE0F; by <a href="https://suroy.cn" target="_blank" rel="noopener">Suroy</a> ·
+        <a href="https://github.com/zsuroy/dockerview-go" target="_blank" rel="noopener">GitHub</a> ·
+        <a href="https://github.com/zsuroy/dockerview-go/blob/master/LICENSE" target="_blank" rel="noopener">MIT License</a>
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>
