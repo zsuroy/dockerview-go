@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.25] - 2026-10-01
+
+### Added
+
+- **WeCom Smart Robot (long connection)**: New "WeCom / 企微" tab connects the DUTY assistant to a WeCom (企业微信) smart robot over the official WebSocket long connection (`wss://openws.work.weixin.qq.com`). Ask "which containers are unhealthy?" in chat and get the same answer the DUTY tab gives, through the shared `askDuty` path (same actor resolution, same audit line for proposals, same "never execute here" rule). Restart/stop requests are latched: the bot names the container and action and points at the web console — clicking its card only records an event, it never starts or stops anything. New package `internal/wecom` (bridge, inbound dispatch, transcript, status, group-webhook notifier), new endpoints `GET /api/wecom/state` (guest-readable) + `POST /api/wecom/inject` / `POST /api/wecom/welcome` (admin token), new `wecom:` group in `config.yaml` (`WECOM_ENABLED`, `WECOM_BOT_ID`, `WECOM_BOT_SECRET` / `secret_file`, `WECOM_WS_URL`, `WECOM_REPLY_MODE`) where the Secret never comes from YAML. Without credentials it runs in an in-memory mock (SDK client built, never dials), so the full flow is verifiable offline; new `-container-fixture` flag seeds a container snapshot under `-no-docker`. The TUI shows a read-only WeCom status row.
+- **Markdown replies in web console**: Assistant answers in the DUTY tab and replies in the WeCom tab now render Markdown (GFM pipe tables, fenced code, headings, lists, blockquotes, links) via a zero-dependency `Markdown` component. Raw HTML is escaped and only `http(s)` links are linked, so model output cannot inject markup or scripts.
+
 ## [0.1.24] - 2026-09-08
 
 ### Added

@@ -21,6 +21,7 @@ import (
 	"github.com/zsuroy/dockerview-go/internal/files"
 	"github.com/zsuroy/dockerview-go/internal/netview"
 	"github.com/zsuroy/dockerview-go/internal/version"
+	"github.com/zsuroy/dockerview-go/internal/wecom"
 )
 
 //go:embed all:web
@@ -51,6 +52,19 @@ type Server struct {
 	dutyAgent      dutyAgent
 	dutyWriteMu    sync.Mutex
 	dutyWrites     map[string]bool
+	wecomBridge    wecomBridge
+}
+
+// wecomBridge is the interface the server uses to reach the WeCom long
+// connection. It is implemented by *wecom.Bridge and is nil when the
+// integration is off.
+type wecomBridge interface {
+	Start(ctx context.Context) error
+	Stop() error
+	Mode() wecom.Mode
+	Snapshot(injectAllowed bool) wecom.Snapshot
+	Inject(text, userID, chatID string) (wecom.Entry, error)
+	InjectEnterChat(userID string) error
 }
 
 // dutyAgent is the interface the server uses to interact with the duty agent.
@@ -89,6 +103,18 @@ func NewServer(cli *client.Client, token string, currentVersion, commit, buildDa
 func (s *Server) SetDutyAgent(a dutyAgent) {
 	s.dutyAgent = a
 }
+
+// SetWeComBridge installs the WeCom long-connection bridge. Pass nil to
+// disable the /api/wecom endpoints. The caller owns Start/Stop.
+func (s *Server) SetWeComBridge(b wecomBridge) {
+	s.mu.Lock()
+	s.wecomBridge = b
+	s.mu.Unlock()
+}
+
+// DutyAsker returns the wecom.Asker backing this server, so the long
+// connection reaches DUTY through the same call the HTTP handler makes.
+func (s *Server) DutyAsker() *dutyAsker { return NewDutyAsker(s) }
 
 // SetAuditer installs (or replaces) the audit recorder. If nil, a no-op
 // recorder is used so audit endpoints return 503 but don't crash.
@@ -184,6 +210,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/duty/tickets", s.handleDutyTickets)
 	mux.HandleFunc("/api/duty/confirm", s.handleDutyConfirm)
 	mux.HandleFunc("/api/duty/config", s.handleDutyConfig)
+	// WeCom smart robot: read-only state is open to guests (mirrors /data);
+	// inject and the welcome drill require an admin token.
+	mux.HandleFunc("/api/wecom/state", s.handleWeComState)
+	mux.HandleFunc("/api/wecom/inject", s.handleWeComInject)
+	mux.HandleFunc("/api/wecom/welcome", s.handleWeComWelcome)
 	mux.HandleFunc("/api/files/", s.handleFilesNotFound)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Try to serve static file; if not found, fall back to index.html (SPA)

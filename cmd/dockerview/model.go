@@ -40,6 +40,11 @@ type model struct {
 	topologyLoading bool
 
 	termWidth int
+
+	// wecomLine renders the read-only WeCom status row. It is nil when the
+	// integration is off. The TUI never injects, reconfigures, or confirms a
+	// write — those live in the web console where they can be authenticated.
+	wecomLine func() string
 }
 
 type tickMsg struct {
@@ -509,6 +514,12 @@ func (m *model) View() string {
 				lipgloss.NewStyle().Bold(true).Render(selectedName)),
 		)
 		content += "\n\n" + actionBar
+	}
+
+	if m.wecomLine != nil {
+		if line := m.wecomLine(); line != "" {
+			content += "\n" + styleSubtitle.Render(line)
+		}
 	}
 
 	if m.statusMsg != "" {

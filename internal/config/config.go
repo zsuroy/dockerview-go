@@ -37,6 +37,18 @@ const (
 	EnvAgentModel      = "DOCKERVIEW_AGENT_MODEL"
 	EnvAgentAPIKey     = "DOCKERVIEW_AGENT_API_KEY"
 	EnvAgentAPIKeyFile = "DOCKERVIEW_AGENT_API_KEY_FILE"
+
+	// WeCom smart-robot long connection. These names match the SDK README's
+	// quick-start (WECOM_BOT_ID / WECOM_BOT_SECRET) so operators do not have
+	// to learn a second vocabulary.
+	EnvWeComEnabled     = "WECOM_ENABLED"
+	EnvWeComBotID       = "WECOM_BOT_ID"
+	EnvWeComSecret      = "WECOM_BOT_SECRET"
+	EnvWeComSecretFile  = "WECOM_BOT_SECRET_FILE"
+	EnvWeComWSURL       = "WECOM_WS_URL"
+	EnvWeComReplyMode   = "WECOM_REPLY_MODE"
+	EnvWeComGroupHook   = "WECOM_GROUP_WEBHOOK_ENABLED"
+	EnvWeComGroupHookIn = "WECOM_GROUP_WEBHOOK_URL_FILE"
 )
 
 // ConfigFileName is the single human-edited config file under ConfigRoot.
@@ -71,6 +83,34 @@ type AgentConfig struct {
 	Model      string
 	APIKey     string
 	APIKeyFile string
+}
+
+// WeComConfig groups the WeCom smart-robot long-connection settings.
+//
+// Credentials follow the same rule as the duty agent's API key: the Secret is
+// never written into yaml. It comes from WECOM_BOT_SECRET or from a 0600 file
+// named by secret_file.
+type WeComConfig struct {
+	Enabled bool
+	// BotID comes from the WeCom admin console.
+	BotID string
+	// Secret is filled from the environment only.
+	Secret string
+	// SecretFile is a path to a 0600 file holding the Secret on one line.
+	SecretFile string
+	// WSURL overrides the long-connection endpoint. Empty means the SDK
+	// default, wss://openws.work.weixin.qq.com.
+	WSURL string
+	// ReplyMode is "stream" (default) or "markdown".
+	ReplyMode string
+	// Welcome overrides the enter_chat greeting. Empty means the built-in one.
+	Welcome string
+	// GroupWebhookEnabled turns on the optional group-robot notification.
+	// That is a different transport (plain HTTP JSON), outbound only, and it
+	// is never the primary path.
+	GroupWebhookEnabled bool
+	// GroupWebhookURLFile is a path to a file holding the webhook URL.
+	GroupWebhookURLFile string
 }
 
 // FilesConfig groups the container file-transfer settings.
@@ -120,6 +160,9 @@ type Config struct {
 
 	// Agent config for the duty assistant (OpenAI-compatible).
 	Agent AgentConfig
+
+	// WeCom config for the smart-robot long connection.
+	WeCom WeComConfig
 
 	Files FilesConfig
 
@@ -511,6 +554,68 @@ func resolveScalars(cfg *Config, cli CLI, getenv func(string) string, ym yamlMap
 		ac.APIKeyFile = absPath(ac.APIKeyFile)
 	}
 	cfg.Agent = ac
+
+	// --- wecom (smart-robot long connection) --------------------------------
+	// The `wecom:` table mirrors `agent:`. Credentials may not appear in yaml:
+	// only the BotID, the path to a secret file, and non-secret switches do.
+	wc := WeComConfig{ReplyMode: "stream"}
+	wecomBool := func(envKey, tableKey, srcKey string, dst *bool) error {
+		if v := strings.TrimSpace(getenv(envKey)); v != "" {
+			*dst = parseEnvBool(v)
+			cfg.Sources[srcKey] = LayerEnv
+			return nil
+		}
+		if v, ok := ym.getTable("wecom", tableKey); ok && strings.TrimSpace(v) != "" {
+			b, err := parseBool(strings.TrimSpace(v))
+			if err != nil {
+				return fmt.Errorf("config: wecom.%s must be true or false, got %q", tableKey, v)
+			}
+			*dst = b
+			cfg.Sources[srcKey] = LayerYAML
+			return nil
+		}
+		cfg.Sources[srcKey] = LayerDefault
+		return nil
+	}
+	wecomScalar := func(envKey, tableKey, srcKey string, dst *string) {
+		if v := strings.TrimSpace(getenv(envKey)); v != "" {
+			*dst = v
+			cfg.Sources[srcKey] = LayerEnv
+		} else if v, ok := ym.getTable("wecom", tableKey); ok && strings.TrimSpace(v) != "" {
+			*dst = strings.TrimSpace(v)
+			cfg.Sources[srcKey] = LayerYAML
+		} else {
+			cfg.Sources[srcKey] = LayerDefault
+		}
+	}
+
+	if err := wecomBool(EnvWeComEnabled, "enabled", "wecom_enabled", &wc.Enabled); err != nil {
+		return err
+	}
+	wecomScalar(EnvWeComBotID, "bot_id", "wecom_bot_id", &wc.BotID)
+	// Secret: environment only, exactly like agent_api_key. Reading it here (as
+	// well as in internal/wecom) keeps the "never from yaml" rule visible in the
+	// one file an operator reads.
+	wc.Secret = strings.TrimSpace(getenv(EnvWeComSecret))
+	if wc.Secret != "" {
+		cfg.Sources["wecom_secret"] = LayerEnv
+	}
+	wecomScalar(EnvWeComSecretFile, "secret_file", "wecom_secret_file", &wc.SecretFile)
+	wecomScalar(EnvWeComWSURL, "ws_url", "wecom_ws_url", &wc.WSURL)
+	wecomScalar(EnvWeComReplyMode, "reply_mode", "wecom_reply_mode", &wc.ReplyMode)
+	wecomScalar("", "welcome", "wecom_welcome", &wc.Welcome)
+	if err := wecomBool(EnvWeComGroupHook, "group_webhook_enabled", "wecom_group_webhook_enabled", &wc.GroupWebhookEnabled); err != nil {
+		return err
+	}
+	wecomScalar(EnvWeComGroupHookIn, "group_webhook_url_file", "wecom_group_webhook_url_file", &wc.GroupWebhookURLFile)
+
+	if wc.SecretFile != "" {
+		wc.SecretFile = absPath(wc.SecretFile)
+	}
+	if wc.GroupWebhookURLFile != "" {
+		wc.GroupWebhookURLFile = absPath(wc.GroupWebhookURLFile)
+	}
+	cfg.WeCom = wc
 	return nil
 }
 

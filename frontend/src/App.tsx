@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid, Archive, FolderOpen, Bot, Network } from 'lucide-react';
+import { RefreshCcw, Download, RefreshCw, CheckCircle, AlertCircle, ClipboardList, LayoutGrid, Archive, FolderOpen, Bot, Network, Radio } from 'lucide-react';
 import type { ToastMessage } from './types';
 import { formatBytes, basePath } from './utils';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -17,6 +17,7 @@ import { BackupPanel } from './components/BackupPanel';
 import { FilesPanel } from './components/FilesPanel';
 import { DutyPanel } from './components/duty/DutyPanel';
 import NetworkPanel from './network/NetworkPanel';
+import { WeComPanel } from './components/wecom/WeComPanel';
 
 interface VersionInfo {
   current_version: string;
@@ -64,7 +65,7 @@ export default function App() {
   const [pendingAction, setPendingAction] = useState<PendingActionType | null>(null);
 
   // Active top-level view: containers, audit, backups, files, duty, or network
-  const [view, setView] = useState<'containers' | 'audit' | 'backups' | 'files' | 'duty' | 'network'>('containers');
+  const [view, setView] = useState<'containers' | 'audit' | 'backups' | 'files' | 'duty' | 'wecom' | 'network'>('containers');
   const [filesContainerId, setFilesContainerId] = useState<string | undefined>(undefined);
 
   // Modals & Toasts
@@ -392,7 +393,7 @@ export default function App() {
         />
 
         {/* View toggle (containers | audit) */}
-        <div className="flex items-center gap-2 mb-5 mt-[18px]">
+        <div className="flex flex-wrap items-center gap-2 mb-5 mt-[18px]">
           <button
             onClick={() => setView('containers')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[12px] tracking-wider uppercase border transition-all ${view === 'containers' ? 'bg-accent-cyan/15 border-accent-cyan/50 text-accent-cyan' : 'bg-surface-1 border-border-light text-text-dim hover:text-text'}`}
@@ -426,6 +427,13 @@ export default function App() {
             data-testid="nav-duty"
           >
             <Bot className="w-3.5 h-3.5" />{t('duty.nav')}
+          </button>
+          <button
+            onClick={() => setView('wecom')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[12px] tracking-wider uppercase border transition-all ${view === 'wecom' ? 'bg-accent-cyan/15 border-accent-cyan/50 text-accent-cyan' : 'bg-surface-1 border-border-light text-text-dim hover:text-text'}`}
+            data-testid="nav-wecom"
+          >
+            <Radio className="w-3.5 h-3.5" />{t('wecom.nav')}
           </button>
           <button
             onClick={() => setView('network')}
@@ -463,6 +471,16 @@ export default function App() {
           />
          ) : view === 'duty' ? (
            <DutyPanel
+             serverToken={serverToken}
+             onAuthRequired={() => {
+               localStorage.removeItem('dockerview_token');
+               setServerToken('');
+               setAuthError(true);
+               setShowAuthModal(true);
+             }}
+           />
+          ) : view === 'wecom' ? (
+           <WeComPanel
              serverToken={serverToken}
              onAuthRequired={() => {
                localStorage.removeItem('dockerview_token');

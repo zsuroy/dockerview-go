@@ -42,7 +42,8 @@
 - **操作审计中心**：追踪「谁在何时对哪个容器做了什么」。关键写操作（start/stop/restart/exec）会持久化到审计日志，包含操作者身份、来源、时间、容器、结果、耗时和请求上下文。Web 仪表盘提供可搜索的审计视图，支持筛选、分页和 JSON/Markdown 导出。
 - **备份快照**：在宿主机重装或版本升级前，将当前容器现场打包为可携带的 zip 归档。支持预览打包计划（不写磁盘）、创建带交接备注的原子归档，并在「备份」标签页中浏览、下载、删除历史快照。默认仅导出运行中的容器，可勾选包含已停止容器。支持通过 `-no-docker` + JSON fixture 离线验证。
 - **容器文件传输**：在 Web 仪表盘的「文件」标签页中浏览、上传、下载容器内文件并打包归档。访问被限制在白名单根目录内（默认 `/tmp/dockerview-files`，可通过 `config.yaml` 配置）。上传采用「预览 → 确认」两步流程，覆盖已有文件与创建缺失目录均需显式确认；文件夹可打包为 tar 下载；所有操作均记录审计日志。
-- **值班助手（值班问询助手）**：在「Duty」标签页用自然语言提问——「有哪些容器在运行？」、「看看 api 的 ERROR 日志」、「最近谁重启过容器？」——副驾驶会基于实时容器状态、日志和审计记录汇总结论，并附上工具调用轨迹作为证据。涉及容器的变更操作只会被*建议*：先展示影响面，再由管理员 Token 人工确认后才会真正执行；整个过程全部落审计。
+- **值班助手（值班问询助手）**：在「Duty」标签页用自然语言提问——「有哪些容器在运行？」、「看看 api 的 ERROR 日志」、「最近谁重启过容器？」——副驾驶会基于实时容器状态、日志和审计记录汇总结论，并附上工具调用轨迹作为证据。涉及容器的变更操作只会被*建议*：先展示影响面，再由管理员 Token 人工确认后才会真正执行；整个过程全部落审计。助手回答按 Markdown 渲染（表格、代码、列表）。
+- **企微智能机器人（长连接）**：把值班助手接到企业微信智能机器人（API 模式长连接），在群里直接问容器状态，不用开浏览器。重启类请求会被锁住：确认只能在 Web 控制台点，群里点卡片只记录事件、不执行。
 - **只读网络拓扑**：「Network」标签页将 Docker 网络绘制为分组框架，容器绘制为节点。同一网络上的容器以成员关系边连接（不代表流量）。空网络也保留 0 容器框架，跨多网络的容器只渲染一次，并在详情卡中展示全部成员关系。画布支持拖拽/缩放、节点点击查看详情、网络计数表，以及保留网络/容器名称文本的同树 SVG 导出。`GET /api/networks/topology` 为只读接口，访客无需 Token 即可读取；无创建/删除/连接类接口。终端 TUI 也提供网络摘要视图。
 - **配置文件与分层优先级**：所有配置按统一链路解析：命令行参数 > `DOCKERVIEW_*` 环境变量 > `config.yaml` > 内置默认值。首次启动自动生成带注释的 `config.yaml` 示例（也可用 `-config-init` 手动生成，绝不覆盖现有文件）；Token 永不写入 YAML（通过 `-token`、`DOCKERVIEW_TOKEN` 或 `token_file` 提供）。
 - **状态颜色标识**：运行中为绿色，已停止/退出为红色
@@ -170,6 +171,27 @@ agent:
 - **环境变量可覆盖**: `DOCKERVIEW_AGENT_ENABLED=1`、`DOCKERVIEW_AGENT_BASE_URL=…`、`DOCKERVIEW_AGENT_MODEL=…` 与配置键等效; 旧版平铺写法 `agent_enabled`/`agent_model` 等仍然兼容。
 - **动容器必须人工确认**: 副驾驶对 start/stop/restart 等变更操作只做提案(展示影响面), 通过 `POST /api/duty/confirm` 且校验管理员 Token 后才真正执行; 提案与确认均写入审计。
 - **工单留痕**: 每次问答都会归档到 `data/db/duty.db`, 可在面板内随时查看。
+- **Markdown 回答**: 助手回复按 Markdown 渲染(GFM 表格、代码块、标题、列表、链接)。原文 HTML 会被转义，只有 `http(s)` 链接可点。
+
+#### 企微智能机器人（长连接）
+
+「企微」标签页把值班助手接到企业微信智能机器人（API 模式）。群里提问——桥接层走的和 `POST /api/duty/ask` 同一条 `askDuty` 路径，答案和 Duty 标签页完全一致。
+
+```yaml
+# config.yaml
+wecom:
+  enabled: true
+  # bot_id: ww0123456789abcdef        # 企业微信管理后台拿
+  # secret_file: /etc/dockerview/wecom_secret   # 0600 文件，或 WECOM_BOT_SECRET 环境变量
+  # ws_url: wss://openws.work.weixin.qq.com     # 默认；测试可覆盖
+  # reply_mode: stream                # stream（默认）| markdown
+```
+
+- **默认 mock**：没有 `WECOM_BOT_ID` 和 Secret 时只构建 SDK 客户端、绝不拨号；注入的消息和真实回调走同一个 handler。云端没企微账号就用 mock 验收，真连公网永远不是验收路径。
+- **Secret 处理**：只从 `WECOM_BOT_SECRET` 或 0600 `secret_file` 来，绝不写进 yaml（写了会被校验拒绝）。
+- **访客可读、注入要管理员**：`GET /api/wecom/state` 免 token；`POST /api/wecom/inject` 和 `POST /api/wecom/welcome` 要管理员 token。实例本身没配 token 时注入直接拒绝。
+- **写操作锁死**：提案中的重启/停止只会回一段提示加一张模板卡片，点卡片只记事件。执行永远走浏览器里的 `POST /api/duty/confirm`。
+- **TUI 状态行 + 日志文件**：终端只读展示企微状态行；TUI 模式运行时日志进 `data/dockerview.log`。
 
 #### 配置文件
 

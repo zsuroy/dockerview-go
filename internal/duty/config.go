@@ -1,10 +1,16 @@
 package duty
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 )
+
+// ErrDisabled is returned when the agent is switched off. It crosses the
+// server → wecom boundary so the long connection can tell "not enabled"
+// apart from a real failure.
+var ErrDisabled = errors.New("duty agent is disabled")
 
 // Config controls the duty agent's model connection. It is resolved by the
 // main package from CLI flags, environment, and config.yaml using the same

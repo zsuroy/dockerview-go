@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -21,6 +22,7 @@ import (
 	"github.com/zsuroy/dockerview-go/internal/files"
 	"github.com/zsuroy/dockerview-go/internal/netview"
 	"github.com/zsuroy/dockerview-go/internal/server"
+	"github.com/zsuroy/dockerview-go/internal/wecom"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -49,6 +51,7 @@ func run() error {
 	fixturePath := fset.String("fixture", "", "JSON fixture for -no-docker backup/files mock mode")
 	backupDir := fset.String("backup-dir", "", "Backup snapshot dir override (default: $DataRoot/backups)")
 	backupMax := fset.Int("backup-max", 0, "Backup retention count override (default 10)")
+	containerFixture := fset.String("container-fixture", "", "JSON array of container snapshots used to seed the dashboard under -no-docker (offline acceptance only)")
 	if err := fset.Parse(os.Args[1:]); err != nil {
 		return err
 	}
@@ -119,6 +122,19 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// TUI uses the alternate screen: any write to stdout/stderr after it
+	// starts tears the layout. In TUI mode runtime logs go to
+	// data/dockerview.log instead of the screen; headless keeps stderr.
+	tuiMode := !(cfg.Server && !isTTY())
+	if tuiMode {
+		if f, err := os.OpenFile(filepath.Join(cfg.DataRoot, "dockerview.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600); err == nil {
+			log.SetOutput(f)
+			defer f.Close()
+		} else {
+			log.SetOutput(io.Discard)
+		}
+	}
+
 	var srv *server.Server
 	if cfg.Server {
 		token := cfg.Token
@@ -135,6 +151,19 @@ func run() error {
 		fmt.Printf("[INFO] Security token: %s\n", token)
 
 		srv = server.NewServer(client, token, Version, Commit, Date)
+
+		// Offline acceptance: with no daemon there is nothing to poll, so the
+		// snapshot stays empty and everything downstream of it — including
+		// DUTY's preview tools, which need a container before they can propose
+		// anything — has nothing to work with. Seed one snapshot instead.
+		if client == nil && *containerFixture != "" {
+			seed, fErr := loadContainerFixture(*containerFixture)
+			if fErr != nil {
+				return fErr
+			}
+			srv.UpdateData(seed)
+			log.Printf("[INFO] Container fixture: %s (%d containers)", *containerFixture, len(seed))
+		}
 		// Files feature: container jail root + host staging + limits.
 		srv.SetFilesConfig(cfg.Files, cfg.FilesDir)
 		var transferCopier files.Copier
@@ -255,9 +284,57 @@ func run() error {
 			}
 		}
 
+		// WeCom smart robot over the official long connection. Enabled via
+		// wecom.enabled or WECOM_ENABLED. Without a BotID and Secret it runs in
+		// mock mode: the SDK client is built but Connect is never called, so no
+		// socket is opened and no credential ever needs to exist for acceptance.
+		if cfg.WeCom.Enabled {
+			hook, hookErr := wecom.NewGroupWebhook(wecom.Config{
+				GroupWebhookEnabled: cfg.WeCom.GroupWebhookEnabled,
+				GroupWebhookURLFile: cfg.WeCom.GroupWebhookURLFile,
+			})
+			if hookErr != nil {
+				log.Printf("[WARN] WeCom group webhook unavailable: %v", hookErr)
+			}
+
+			wecomCfg := wecom.Config{
+				Enabled:             cfg.WeCom.Enabled,
+				BotID:               cfg.WeCom.BotID,
+				Secret:              cfg.WeCom.Secret,
+				SecretFile:          cfg.WeCom.SecretFile,
+				WSURL:               cfg.WeCom.WSURL,
+				ReplyMode:           cfg.WeCom.ReplyMode,
+				Welcome:             cfg.WeCom.Welcome,
+				GroupWebhookEnabled: cfg.WeCom.GroupWebhookEnabled,
+				GroupWebhookURLFile: cfg.WeCom.GroupWebhookURLFile,
+			}
+
+			// The bridge reaches DUTY through the same method POST /api/duty/ask
+			// uses. srv may have no agent installed; the bridge reports that
+			// honestly rather than failing to start.
+			var bridge *wecom.Bridge
+			var bErr error
+			if hook != nil {
+				bridge, bErr = wecom.New(wecomCfg, srv.DutyAsker(), hook)
+			} else {
+				bridge, bErr = wecom.New(wecomCfg, srv.DutyAsker(), nil)
+			}
+			if bErr != nil {
+				log.Printf("[WARN] WeCom bridge unavailable: %v", bErr)
+			} else {
+				srv.SetWeComBridge(bridge)
+				if startErr := bridge.Start(ctx); startErr != nil {
+					log.Printf("[WARN] WeCom bridge start: %v", startErr)
+				}
+				defer bridge.Stop()
+				log.Printf("[INFO] WeCom: mode=%s state=%s ws_url=%s bot_id=%s",
+					bridge.Mode(), bridge.State(), wecomCfg.ResolveWSURL(), wecom.MaskBotID(wecomCfg.ResolveBotID()))
+			}
+		}
+
 		go func() {
 			if err := srv.Start(ctx, cfg.Port); err != nil {
-				fmt.Fprintf(os.Stderr, "HTTP server error: %v\n", err)
+				log.Printf("HTTP server error: %v", err)
 			}
 		}()
 	}
@@ -291,6 +368,10 @@ func run() error {
 	}
 
 	m := &model{dockerClient: client}
+	if srv != nil {
+		// Read live on every render so the row tracks the connection.
+		m.wecomLine = srv.WeComStatusLine
+	}
 
 	go func() {
 		ticker := time.NewTicker(time.Second)
