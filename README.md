@@ -42,7 +42,8 @@ English | [中文](README_zh.md)
 - **Operation Audit Center**: Track who did what, when, to which container. Key write operations (start, stop, restart, exec) are persisted to an audit log with actor identity, source, timestamp, container, result, duration, and request context. The web dashboard provides a searchable audit view with filters, pagination, and JSON/Markdown export.
 - **Backup Snapshots**: Capture the current container scene as a portable zip archive before upgrades or host rebuilds. Preview the packing plan (zero disk writes), create an atomic archive with an operator note, and browse/download/delete past snapshots from the "BACKUPS" tab. Defaults to running containers only; optionally include stopped containers. Supports offline verification via `-no-docker` + JSON fixtures.
 - **Container File Transfer**: Browse, upload, download, and archive files inside containers from the "FILES" tab. Access is confined to a jail root (default `/tmp/dockerview-files`, configurable via `config.yaml`). Uploads use a preview/confirm two-step flow with explicit overwrite and missing-directory consent; folder downloads are streamed as tar archives; every transfer is audited.
-- **Duty Assistant (On-Call Copilot)**: Ask ops questions in plain language from the "DUTY" tab — "what containers are running?", "show me ERROR logs for api", "who restarted containers recently?" — and get evidence-backed answers compiled from live container state, logs, and the audit log (each answer shows the tool traces behind it). Mutating actions are only ever *proposed*: the expected impact is shown and execution requires explicit human confirmation with the admin token, fully audited.
+- **Duty Assistant (On-Call Copilot)**: Ask ops questions in plain language from the "DUTY" tab — "what containers are running?", "show me ERROR logs for api", "who restarted containers recently?" — and get evidence-backed answers compiled from live container state, logs, and the audit log (each answer shows the tool traces behind it). Mutating actions are only ever *proposed*: the expected impact is shown and execution requires explicit human confirmation with the admin token, fully audited. Assistant answers render as Markdown (tables, code, lists).
+- **WeCom Smart Robot (long connection)**: Connect the DUTY assistant to a WeCom (企业微信) smart robot over the official WebSocket long connection — the night shift gets answers without opening a browser. Restart requests are latched: confirming happens in the web console, never from a chat card click. Without credentials it runs in an in-memory mock, so the whole flow is verifiable offline.
 - **Network Topology (Read-only)**: The "Network" tab visualizes Docker networks as grouped frames and containers as nodes. Containers sharing a network are connected by membership-only edges (not traffic). Empty networks remain visible with a 0-container frame, and containers attached to multiple networks render once with all memberships shown in the detail card. Includes an interactive SVG graph with pan/zoom, node selection, per-network counts, and same-tree SVG export with grep-able names. The read-only `GET /api/networks/topology` endpoint is token-free for guests; there is no create/delete/connect route. The TUI also shows a network summary.
 - **Configuration File & Layered Precedence**: Every setting resolves through one chain: CLI flag > `DOCKERVIEW_*` env var > `config.yaml` > built-in default. A commented sample `config.yaml` is written on first launch (or via `-config-init`) and never overwritten; tokens stay out of YAML (`-token`, `DOCKERVIEW_TOKEN`, or `token_file`).
 - **Color-coded Status**: Green for running, red for stopped/exited containers.
@@ -170,6 +171,27 @@ agent:
 - **Env overrides**: `DOCKERVIEW_AGENT_ENABLED=1`, `DOCKERVIEW_AGENT_BASE_URL=…`, `DOCKERVIEW_AGENT_MODEL=…` behave the same as the YAML keys. The flat `agent_enabled`/`agent_model`/… form from older configs is still honored.
 - **Human-gated writes**: the agent only *proposes* mutating operations (start/stop/restart) with expected impact. Execution happens via `POST /api/duty/confirm` only after the admin token is confirmed — never automatically. Proposals and confirmations are recorded in the audit log.
 - **Tickets**: every Q&A is persisted to `data/db/duty.db` and inspectable from the panel.
+- **Markdown answers**: assistant replies render as Markdown (GFM tables, fenced code, headings, lists, links). Raw HTML is escaped and only `http(s)` links are linked.
+
+#### WeCom Smart Robot (long connection)
+
+The "WeCom" tab wires the DUTY assistant to an enterprise-WeChat smart robot in API mode. Ask in chat — the bridge calls the same `askDuty` path as `POST /api/duty/ask`, so the answer matches the DUTY tab exactly.
+
+```yaml
+# config.yaml
+wecom:
+  enabled: true
+  # bot_id: ww0123456789abcdef        # from the WeCom admin console
+  # secret_file: /etc/dockerview/wecom_secret   # 0600 file, or WECOM_BOT_SECRET env
+  # ws_url: wss://openws.work.weixin.qq.com     # default; override for testing
+  # reply_mode: stream                # stream (default) | markdown
+```
+
+- **Mock by default**: without `WECOM_BOT_ID` and a Secret the SDK client is built but never dials; injects go through the same handler a real callback hits. Cloud boxes with no WeCom account verify against the mock — a real connection is never the acceptance path.
+- **Secret handling**: the Secret comes from `WECOM_BOT_SECRET` or a 0600 `secret_file`, never from YAML (a config that tries is rejected).
+- **Guest read, admin inject**: `GET /api/wecom/state` is token-free; `POST /api/wecom/inject` and `POST /api/wecom/welcome` require the admin token. When no token is configured on the instance, inject is refused outright.
+- **Latched writes**: a proposed restart/stop renders as a notice plus a template card that only records a click event. Execution stays behind `POST /api/duty/confirm` in the browser.
+- **TUI row + log file**: the terminal shows a read-only WeCom status line; runtime logs in TUI mode go to `data/dockerview.log`.
 
 #### Network Topology (read-only)
 

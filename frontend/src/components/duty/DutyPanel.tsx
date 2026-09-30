@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Loader2, ShieldAlert, CheckCircle, XCircle, ChevronDown, ChevronRight, Bot, User, Wrench, AlertTriangle, RefreshCw } from 'lucide-react';
 import { askDuty, confirmDutyWrite, fetchDutyConfig, fetchDutyTickets } from './dutyApi';
 import type { ChatMessage, DutyConfig, PreviewResult, Ticket, ToolTrace } from './dutyTypes';
+import { Markdown } from '../Markdown';
 import { useTranslation } from '../../i18n';
 
 interface DutyPanelProps {
@@ -298,7 +299,11 @@ setMessages(prev => [...prev, {
                   ? 'bg-accent-cyan/15 text-text rounded-tr-sm'
                   : 'bg-surface-2 text-text rounded-tl-sm border border-border-light'
               }`}>
-                <p className="whitespace-pre-wrap">{msg.text}</p>
+                {msg.role === 'user' ? (
+                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                ) : (
+                  <Markdown text={msg.text} className="text-[13px] leading-relaxed break-words [&_p]:my-1" />
+                )}
               </div>
 
               {/* Tool traces */}

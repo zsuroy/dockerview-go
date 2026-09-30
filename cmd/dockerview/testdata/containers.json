@@ -1,0 +1,45 @@
+[
+  {
+    "FullID": "8f3c1a92d4e7b6a5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1",
+    "ID": "8f3c1a92d4e7",
+    "Name": "api",
+    "Status": "running",
+    "CPU": "62.4%",
+    "Memory": "412MiB / 1GiB",
+    "MemoryPercent": 40.2,
+    "MemoryLimit": "1GiB",
+    "Blkio": "12MB / 4.1MB",
+    "Network": "1.2kB / 840B",
+    "HealthScore": 42,
+    "HealthStatus": "dangerous",
+    "ports": [{"private_port": 8080, "public_port": 8080, "type": "tcp"}]
+  },
+  {
+    "FullID": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+    "ID": "1a2b3c4d5e6f",
+    "Name": "web",
+    "Status": "running",
+    "CPU": "4.1%",
+    "Memory": "88MiB / 512MiB",
+    "MemoryPercent": 17.2,
+    "MemoryLimit": "512MiB",
+    "Blkio": "2MB / 0B",
+    "Network": "640B / 1.1kB",
+    "HealthScore": 91,
+    "HealthStatus": "healthy",
+    "ports": [{"private_port": 80, "public_port": 80, "type": "tcp"}]
+  },
+  {
+    "FullID": "9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b",
+    "ID": "9c8b7a6f5e4d",
+    "Name": "worker",
+    "Status": "exited",
+    "CPU": "0.0%",
+    "Memory": "0B / 256MiB",
+    "Blkio": "0B / 0B",
+    "Network": "0B / 0B",
+    "HealthScore": 0,
+    "HealthStatus": "dangerous",
+    "ports": []
+  }
+]

@@ -1,6 +1,6 @@
 module github.com/zsuroy/dockerview-go
 
-go 1.25.0
+go 1.26.8
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/firebase/genkit/go v1.12.0
+	github.com/go-sphere/wecom-aibot-go-sdk v1.0.5
 	github.com/google/uuid v1.6.0
 	github.com/openai/openai-go v1.8.2
 	modernc.org/sqlite v1.56.0
@@ -36,6 +37,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/google/dotprompt/go v0.0.0-20260708220100-73beb993ac95 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/mbleigh/raymond v0.0.0-20250414171441-6b3a58ab9e0a // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

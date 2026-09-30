@@ -65,6 +65,31 @@ agent:
   # base_url: https://api.openai.com/v1
   # model: gpt-4o-mini
   # api_key_file: /etc/dockerview/agent_key
+
+# WeCom (企业微信) smart robot over the official long connection.
+# When enabled, a "企微" tab appears in the web UI with the connection state,
+# recent inbound messages and replies, and an admin-only inject box.
+#
+# The Secret is NEVER written here. Put it in the environment:
+#   export WECOM_BOT_SECRET=...
+# or in a 0600 file and point secret_file at it:
+#   printf '%s' "$SECRET" > /etc/dockerview/wecom_secret && chmod 600 /etc/dockerview/wecom_secret
+#
+# Without WECOM_BOT_ID and a Secret the integration runs in mock mode: it
+# builds the SDK client but never dials, and inbound frames are injected
+# in memory. That is the default here, and it is what acceptance exercises.
+wecom:
+  enabled: false
+  # bot_id: ww0123456789abcdef        # from the WeCom admin console
+  # secret_file: /etc/dockerview/wecom_secret
+  # ws_url: wss://openws.work.weixin.qq.com   # default; override for testing
+  # reply_mode: stream                # stream (default) | markdown
+  # welcome: ""                       # overrides the built-in enter_chat greeting
+  #
+  # Optional group-robot webhook. A different transport (plain HTTP JSON),
+  # outbound only, never the primary path, off by default.
+  group_webhook_enabled: false
+  # group_webhook_url_file: /etc/dockerview/wecom_group_webhook
 `
 
 // WriteSample creates config.yaml in configDir from the commented sample,
@@ -91,7 +116,7 @@ var validTopKeys = map[string]bool{
 	"server": true, "port": true,
 	"audit_enabled": true, "audit_retention_days": true,
 	"backup_max": true, "data_root": true, "token_file": true,
-	"files": true, "agent": true,
+	"files": true, "agent": true, "wecom": true,
 	// flat agent_* form is still accepted (pre-group configs).
 	"agent_enabled": true, "agent_provider": true, "agent_base_url": true,
 	"agent_model": true, "agent_api_key_file": true,
@@ -105,6 +130,15 @@ var validSubKeys = map[string]map[string]bool{
 	"agent": {
 		"enabled": true, "provider": true, "base_url": true,
 		"model": true, "api_key_file": true,
+	},
+	// Note the absences: `secret` and `bot_secret` are deliberately not valid
+	// keys. The long-connection Secret comes from WECOM_BOT_SECRET or from the
+	// file named by secret_file, and validateYAML rejects a config that tries
+	// to put the credential itself in yaml.
+	"wecom": {
+		"enabled": true, "bot_id": true, "secret_file": true,
+		"ws_url": true, "reply_mode": true, "welcome": true,
+		"group_webhook_enabled": true, "group_webhook_url_file": true,
 	},
 }
 

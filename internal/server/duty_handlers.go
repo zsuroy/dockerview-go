@@ -54,32 +54,20 @@ func (s *Server) handleDutyAsk(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := contextWithTimeout(r, 60*time.Second)
 	defer cancel()
 
-	res, err := s.dutyAgent.Ask(ctx, body.Question, actor, kind, source)
+	// Shared with the WeCom long-connection handler: same actor resolution,
+	// same audit line for a proposed write, same "never execute here" rule.
+	res, err := s.askDuty(ctx, askRequest{
+		Question:  body.Question,
+		Actor:     actor,
+		ActorKind: kind,
+		Source:    source,
+		ClientIP:  ip,
+		UserAgent: ua,
+	})
 	if err != nil {
 		log.Printf("[WARN] duty ask error: %v", err)
 		http.Error(w, "Duty agent error", http.StatusInternalServerError)
 		return
-	}
-
-	// If the agent proposed a write, record a "proposed" audit event (not
-	// an execution — the actual write goes through /api/container/op after
-	// human confirmation).
-	if res.ProposedWrite != nil {
-		s.aud().Record(r.Context(), audit.Event{
-			Time:          time.Now().UTC(),
-			Actor:         actor,
-			ActorKind:     kind,
-			Source:        source,
-			Action:        "duty_propose_" + res.ProposedWrite.Op,
-			ContainerID:   res.ProposedWrite.ID,
-			ContainerName: res.ProposedWrite.Name,
-			Result:        audit.ResultSuccess,
-			StatusCode:    http.StatusOK,
-			Detail:        "duty agent proposed " + res.ProposedWrite.Op + "; awaiting human confirm",
-			ClientIP:      ip,
-			UserAgent:     ua,
-			RequestID:     "duty_" + uuid.NewString()[:8],
-		})
 	}
 
 	writeJSON(w, http.StatusOK, res)
